@@ -1,0 +1,81 @@
+---
+# Tailscale Role - Main Tasks
+# Constitution I: Security-First - VPN-only access to private network
+
+- name: Check if running on OPNsense
+  ansible.builtin.raw: |
+    uname -a | grep -i freebsd && opnsense-version || echo "Not OPNsense"
+  register: opnsense_check
+  changed_when: false
+
+- name: Set OPNsense flag
+  ansible.builtin.set_fact:
+    is_opnsense: "{{ 'OPNsense' in opnsense_check.stdout }}"
+
+# OPNsense Tailscale installation
+- name: Install Tailscale on OPNsense
+  when: is_opnsense | bool
+  block:
+    - name: Update OPNsense package repository
+      ansible.builtin.raw: |
+        pkg update -f
+      changed_when: false
+
+    - name: Install Tailscale plugin on OPNsense
+      ansible.builtin.raw: |
+        pkg install -y os-tailscale || echo "Package may already be installed"
+      register: tailscale_install
+      changed_when: "'Installing' in tailscale_install.stdout"
+
+    - name: Enable Tailscale service
+      ansible.builtin.raw: |
+        /usr/local/etc/rc.d/tailscaled enable || true
+        /usr/local/etc/rc.d/tailscaled start || true
+      changed_when: false
+
+# Linux Tailscale installation
+- name: Install Tailscale on Linux
+  when: not is_opnsense | bool
+  block:
+    - name: Add Tailscale repository key
+      ansible.builtin.shell: |
+        curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/jammy.noarmor.gpg | \
+        tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+      args:
+        creates: /usr/share/keyrings/tailscale-archive-keyring.gpg
+
+    - name: Add Tailscale repository
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/ubuntu jammy main"
+        state: present
+        filename: tailscale
+
+    - name: Install Tailscale
+      ansible.builtin.apt:
+        name: tailscale
+        state: present
+        update_cache: yes
+
+    - name: Enable and start Tailscale service
+      ansible.builtin.systemd:
+        name: tailscaled
+        enabled: yes
+        state: started
+
+- name: Include authentication tasks
+  ansible.builtin.include_tasks: auth.yml
+  tags: [auth]
+
+- name: Include subnet routing configuration
+  ansible.builtin.include_tasks: subnet.yml
+  tags: [subnet, routes]
+
+- name: Verify Tailscale status
+  ansible.builtin.raw: |
+    tailscale status || /usr/local/bin/tailscale status
+  register: final_status
+  changed_when: false
+
+- name: Display final Tailscale status
+  ansible.builtin.debug:
+    var: final_status.stdout_lines

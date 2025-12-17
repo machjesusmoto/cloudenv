@@ -1,0 +1,7 @@
+# DNS Configuration for Proxmox
+# Managed by Ansible - Do not edit manually
+
+search {{ proxmox_domain }}
+{% for dns in proxmox_dns_servers %}
+nameserver {{ dns }}
+{% endfor %}

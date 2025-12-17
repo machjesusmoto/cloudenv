@@ -1,0 +1,24 @@
+# Proxmox Network Interfaces
+# Managed by Ansible - Do not edit manually
+# Constitution I: Security-First - Private network only
+
+auto lo
+iface lo inet loopback
+
+# Primary interface - bridge member
+auto eth0
+iface eth0 inet manual
+
+# Proxmox bridge for VMs
+auto vmbr0
+iface vmbr0 inet static
+    address {{ proxmox_ip }}
+    netmask {{ proxmox_netmask }}
+    gateway {{ proxmox_gateway }}
+    bridge-ports eth0
+    bridge-stp off
+    bridge-fd 0
+
+# DNS Configuration
+    dns-nameservers {{ proxmox_dns_servers | join(' ') }}
+    dns-search {{ proxmox_domain }}

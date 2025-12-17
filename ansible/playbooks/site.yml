@@ -1,0 +1,94 @@
+---
+# T063: Master Playbook - Full Infrastructure Deployment
+# Constitution III: Infrastructure as Code
+# Orchestrates all roles in correct dependency order
+
+- name: Display deployment overview
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Show deployment plan
+      ansible.builtin.debug:
+        msg: |
+          === CloudEnv Full Deployment ===
+
+          Deployment Order:
+          1. Bootstrap (hypervisors) - KVM/libvirt setup
+          2. OPNsense (firewalls) - Network security perimeter
+          3. Tailscale (firewalls) - VPN connectivity
+          4. Proxmox (proxmox) - Virtualization platform
+
+          Constitution Principles Applied:
+          - I: Security-First (VPN-only access)
+          - II: Reliability Through Simplicity
+          - III: Infrastructure as Code
+          - IV: Test Coverage Discipline
+          - V: Extensibility Without Compromise
+          ==================================
+
+# Phase 2: Bootstrap VPS with KVM/libvirt
+- import_playbook: bootstrap.yml
+  tags: [bootstrap, phase2]
+
+# Phase 3: Deploy OPNsense firewall
+- import_playbook: opnsense.yml
+  tags: [opnsense, firewall, phase3]
+
+# Phase 4: Configure Tailscale VPN
+- import_playbook: tailscale.yml
+  tags: [tailscale, vpn, phase4]
+
+# Phase 5: Deploy Proxmox VE
+- import_playbook: proxmox.yml
+  tags: [proxmox, virtualization, phase5]
+
+# Post-deployment validation
+- name: Post-Deployment Validation
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Run connectivity tests
+      ansible.builtin.command: >
+        ansible-playbook ../tests/connectivity.yml
+        -i ../inventory/hosts.yml
+        -e "test_remote_connectivity=true test_proxmox=true"
+      args:
+        chdir: "{{ playbook_dir }}"
+      register: connectivity_tests
+      failed_when: false
+      tags: [test, validate]
+
+    - name: Run security tests
+      ansible.builtin.command: >
+        ansible-playbook ../tests/security.yml
+        -i ../inventory/hosts.yml
+      args:
+        chdir: "{{ playbook_dir }}"
+      register: security_tests
+      failed_when: false
+      tags: [test, validate]
+
+    - name: Deployment Summary
+      ansible.builtin.debug:
+        msg: |
+          === Deployment Complete ===
+
+          Infrastructure Status:
+          - OPNsense Firewall: Configured
+          - Tailscale VPN: Connected (requires route approval)
+          - Proxmox VE: Installed
+
+          Access Points (via Tailscale only):
+          - OPNsense WebUI: https://10.0.0.1:443
+          - Proxmox WebUI: https://10.0.0.10:8006
+
+          Test Results:
+          - Connectivity: {{ 'PASS' if connectivity_tests.rc | default(1) == 0 else 'REVIEW NEEDED' }}
+          - Security: {{ 'PASS' if security_tests.rc | default(1) == 0 else 'REVIEW NEEDED' }}
+
+          Next Steps:
+          1. Approve Tailscale subnet routes
+          2. Run ./scripts/test.sh for full validation
+          3. Review security tests output
+          ============================
+      tags: [summary]

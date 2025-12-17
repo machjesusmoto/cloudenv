@@ -1,0 +1,46 @@
+# Tailscale Configuration
+# Managed by Ansible - Do not edit manually
+# Constitution I: Security-First - VPN-only access
+
+# Authentication
+# Note: Auth key should be provided via ansible-vault
+# tailscale_auth_key: "{{ tailscale_auth_key }}"
+
+# Device Settings
+TAILSCALE_HOSTNAME="{{ tailscale_hostname }}"
+TAILSCALE_ACCEPT_ROUTES="{{ tailscale_accept_routes | lower }}"
+TAILSCALE_ACCEPT_DNS="{{ tailscale_accept_dns | lower }}"
+
+# Subnet Routing
+# Routes to advertise to the tailnet
+TAILSCALE_ADVERTISE_ROUTES="{{ tailscale_advertise_routes | join(',') }}"
+
+# Exit Node Configuration
+TAILSCALE_EXIT_NODE="{{ tailscale_exit_node | lower }}"
+{% if tailscale_exit_node %}
+TAILSCALE_EXIT_NODE_ALLOW_LAN="{{ tailscale_exit_node_allow_lan_access | lower }}"
+{% endif %}
+
+# Network Settings
+TAILSCALE_SHIELDS_UP="{{ tailscale_shields_up | lower }}"
+
+{% if tailscale_login_server %}
+# Custom control server (for Headscale, etc.)
+TAILSCALE_LOGIN_SERVER="{{ tailscale_login_server }}"
+{% endif %}
+
+{% if tailscale_tags %}
+# ACL Tags
+TAILSCALE_TAGS="{{ tailscale_tags | join(',') }}"
+{% endif %}
+
+# OPNsense Integration
+{% if tailscale_opnsense_plugin %}
+# Using OPNsense Tailscale plugin
+TAILSCALE_OPNSENSE_PLUGIN="true"
+{% endif %}
+
+# Firewall Integration
+TAILSCALE_INTERFACE="{{ tailscale_interface }}"
+TAILSCALE_ALLOW_LAN="{{ tailscale_allow_from_lan | lower }}"
+TAILSCALE_ALLOW_TAILNET="{{ tailscale_allow_from_tailnet | lower }}"

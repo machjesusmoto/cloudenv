@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+<!-- OPNsense Configuration Template -->
+<!-- Constitution I: Security-First - Managed via Ansible -->
+<!-- WARNING: This is a partial configuration for reference -->
+<!-- Full config.xml management should use OPNsense API -->
+
+<opnsense>
+  <system>
+    <hostname>{{ opnsense_hostname }}</hostname>
+    <domain>{{ opnsense_domain }}</domain>
+    <timezone>{{ opnsense_timezone }}</timezone>
+    <language>en_US</language>
+    <dnsserver>{{ opnsense_dns_servers | join('</dnsserver><dnsserver>') }}</dnsserver>
+    <ssh>
+      <enabled>{{ 'enabled' if opnsense_ssh_enabled else '' }}</enabled>
+      <passwordauth>{{ '' if opnsense_ssh_password_auth else '' }}</passwordauth>
+      <permitrootlogin>{{ 'enabled' if opnsense_ssh_permit_root else '' }}</permitrootlogin>
+      <port>{{ opnsense_ssh_port }}</port>
+    </ssh>
+    <webgui>
+      <protocol>https</protocol>
+      <port>{{ opnsense_webui_port }}</port>
+      <ssl-certref></ssl-certref>
+      <noantilockout>{{ '' if opnsense_disable_webui_wan else 'enabled' }}</noantilockout>
+    </webgui>
+  </system>
+
+  <interfaces>
+    <wan>
+      <if>{{ opnsense_wan_interface }}</if>
+      <descr>WAN</descr>
+      <enable>1</enable>
+      <ipaddr>dhcp</ipaddr>
+      <blockpriv>1</blockpriv>
+      <blockbogons>1</blockbogons>
+    </wan>
+    <lan>
+      <if>{{ opnsense_lan_interface }}</if>
+      <descr>LAN</descr>
+      <enable>1</enable>
+      <ipaddr>{{ opnsense_lan_ip }}</ipaddr>
+      <subnet>{{ opnsense_lan_netmask }}</subnet>
+    </lan>
+  </interfaces>
+
+  <filter>
+    <!-- Default deny on WAN (implicit) -->
+    <!-- Allow LAN to any -->
+    <rule>
+      <type>pass</type>
+      <interface>lan</interface>
+      <ipprotocol>inet</ipprotocol>
+      <source><any/></source>
+      <destination><any/></destination>
+      <descr>Default allow LAN to any</descr>
+    </rule>
+    <!-- Block all on WAN (explicit) -->
+    <rule>
+      <type>block</type>
+      <interface>wan</interface>
+      <ipprotocol>inet</ipprotocol>
+      <source><any/></source>
+      <destination><any/></destination>
+      <log>1</log>
+      <descr>Default deny WAN incoming</descr>
+    </rule>
+  </filter>
+
+  <nat>
+    <outbound>
+      <mode>automatic</mode>
+    </outbound>
+  </nat>
+</opnsense>

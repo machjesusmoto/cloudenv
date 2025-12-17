@@ -1,0 +1,68 @@
+---
+# OPNsense Interface Configuration
+# Constitution I: Security-First - WAN/LAN segmentation
+
+- name: Configure WAN interface (DHCP)
+  ansible.builtin.raw: |
+    /usr/local/sbin/pluginctl -s dhclient {{ opnsense_wan_interface }} restart || true
+  register: wan_config
+  changed_when: false
+  failed_when: false
+
+- name: Verify WAN interface has IP
+  ansible.builtin.raw: |
+    ifconfig {{ opnsense_wan_interface }} | grep 'inet '
+  register: wan_ip_check
+  changed_when: false
+  retries: 5
+  delay: 10
+  until: wan_ip_check.rc == 0
+
+- name: Display WAN IP
+  ansible.builtin.debug:
+    msg: "WAN IP: {{ wan_ip_check.stdout | regex_search('inet ([0-9.]+)', '\\1') | first }}"
+
+- name: Configure LAN interface (static IP)
+  ansible.builtin.raw: |
+    # Check if LAN is already configured
+    current_ip=$(ifconfig {{ opnsense_lan_interface }} 2>/dev/null | grep 'inet ' | awk '{print $2}')
+    if [ "$current_ip" != "{{ opnsense_lan_ip }}" ]; then
+      echo "Configuring LAN interface..."
+      ifconfig {{ opnsense_lan_interface }} {{ opnsense_lan_ip }}/{{ opnsense_lan_netmask }}
+    else
+      echo "LAN interface already configured"
+    fi
+  register: lan_config
+  changed_when: "'Configuring' in lan_config.stdout"
+
+- name: Verify LAN interface
+  ansible.builtin.raw: |
+    ifconfig {{ opnsense_lan_interface }} | grep 'inet '
+  register: lan_ip_check
+  changed_when: false
+
+- name: Display LAN IP
+  ansible.builtin.debug:
+    msg: "LAN IP: {{ lan_ip_check.stdout | regex_search('inet ([0-9.]+)', '\\1') | first }}"
+
+- name: Enable IP forwarding
+  ansible.builtin.raw: |
+    sysctl net.inet.ip.forwarding=1
+  changed_when: false
+
+- name: Configure default gateway on WAN
+  ansible.builtin.raw: |
+    # Gateway is typically assigned via DHCP on WAN
+    route -n get default || echo "No default route"
+  register: default_route
+  changed_when: false
+
+- name: Display routing table
+  ansible.builtin.raw: |
+    netstat -rn | head -20
+  register: routing_table
+  changed_when: false
+
+- name: Show routing summary
+  ansible.builtin.debug:
+    var: routing_table.stdout_lines

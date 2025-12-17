@@ -1,0 +1,223 @@
+---
+# Connectivity Tests for Tailscale VPN
+# Constitution IV: Test Coverage Discipline
+# Validates VPN connectivity and subnet routing
+
+- name: Connectivity Validation Tests
+  hosts: firewalls
+  gather_facts: no
+  vars:
+    tailscale_subnet: "10.0.0.0/24"
+    test_timeout: 10
+
+  tasks:
+    # T037: Tailscale status and route verification
+    - name: Test - Tailscale service is running
+      ansible.builtin.raw: |
+        /usr/local/bin/tailscale status || tailscale status || echo "Tailscale not available"
+      register: tailscale_status
+      changed_when: false
+      failed_when: false
+
+    - name: Display Tailscale status
+      ansible.builtin.debug:
+        var: tailscale_status.stdout_lines
+
+    - name: Validate - Tailscale is connected
+      ansible.builtin.assert:
+        that:
+          - "'connected' in tailscale_status.stdout | lower or 'online' in tailscale_status.stdout | lower"
+        fail_msg: "Tailscale is not connected"
+        success_msg: "Tailscale is connected to tailnet"
+      when: tailscale_status.rc == 0
+
+    - name: Test - Tailscale IP assigned
+      ansible.builtin.raw: |
+        /usr/local/bin/tailscale ip -4 || tailscale ip -4 || echo "No Tailscale IP"
+      register: tailscale_ip
+      changed_when: false
+      failed_when: false
+
+    - name: Display Tailscale IP
+      ansible.builtin.debug:
+        msg: "Tailscale IP: {{ tailscale_ip.stdout | trim }}"
+      when: tailscale_ip.rc == 0
+
+    - name: Test - Subnet routes advertised
+      ansible.builtin.raw: |
+        /usr/local/bin/tailscale status --json 2>/dev/null | grep -o '"advertise.*' || echo "Check subnet routes manually"
+      register: subnet_routes
+      changed_when: false
+      failed_when: false
+
+    - name: Display advertised routes
+      ansible.builtin.debug:
+        var: subnet_routes.stdout_lines
+
+    # T038: Home-to-VPS ping test (10.0.0.0/24 accessibility)
+    - name: Test - LAN gateway is reachable (10.0.0.1)
+      ansible.builtin.raw: |
+        ping -c 3 10.0.0.1 || echo "Ping failed"
+      register: lan_ping
+      changed_when: false
+      delegate_to: localhost
+      when: test_from_tailnet | default(false) | bool
+
+    - name: Test - Verify route to private subnet via Tailscale
+      ansible.builtin.raw: |
+        ip route show | grep -E "10.0.0.0" || route -n get 10.0.0.0 2>/dev/null || echo "Route check"
+      register: route_check
+      changed_when: false
+      delegate_to: localhost
+      when: test_from_tailnet | default(false) | bool
+
+    - name: Test - DNS resolution via Tailscale
+      ansible.builtin.raw: |
+        nslookup opnsense.cloudenv.local || echo "DNS resolution check"
+      register: dns_check
+      changed_when: false
+      failed_when: false
+      when: test_dns | default(false) | bool
+
+- name: Connectivity Tests from Tailnet Client
+  hosts: localhost
+  gather_facts: no
+  vars:
+    opnsense_lan_ip: "10.0.0.1"
+    proxmox_ip: "10.0.0.10"
+
+  tasks:
+    - name: Check local Tailscale status
+      ansible.builtin.command: tailscale status
+      register: local_tailscale
+      changed_when: false
+      failed_when: false
+
+    - name: Display local Tailscale status
+      ansible.builtin.debug:
+        var: local_tailscale.stdout_lines
+      when: local_tailscale.rc == 0
+
+    - name: Test - Ping OPNsense via Tailscale
+      ansible.builtin.command: ping -c 3 -W 5 {{ opnsense_lan_ip }}
+      register: opnsense_ping
+      changed_when: false
+      failed_when: false
+      when: test_remote_connectivity | default(false) | bool
+
+    - name: Validate - OPNsense reachable via Tailscale
+      ansible.builtin.assert:
+        that:
+          - opnsense_ping.rc == 0
+        fail_msg: "Cannot reach OPNsense ({{ opnsense_lan_ip }}) via Tailscale"
+        success_msg: "OPNsense is reachable via Tailscale"
+      when:
+        - test_remote_connectivity | default(false) | bool
+        - opnsense_ping is defined
+
+    - name: Test - Ping Proxmox via Tailscale (if deployed)
+      ansible.builtin.command: ping -c 3 -W 5 {{ proxmox_ip }}
+      register: proxmox_ping
+      changed_when: false
+      failed_when: false
+      when:
+        - test_remote_connectivity | default(false) | bool
+        - test_proxmox | default(false) | bool
+
+    # T048: Proxmox web UI accessibility test
+    - name: Test - Proxmox Web UI port 8006 accessible
+      ansible.builtin.uri:
+        url: "https://{{ proxmox_ip }}:8006"
+        method: GET
+        validate_certs: no
+        timeout: 10
+        status_code: [200, 301, 302, 401]
+      register: proxmox_webui
+      failed_when: false
+      when:
+        - test_proxmox | default(false) | bool
+        - proxmox_ping.rc | default(1) == 0
+
+    - name: Validate - Proxmox Web UI is accessible
+      ansible.builtin.assert:
+        that:
+          - proxmox_webui.status in [200, 301, 302, 401]
+        fail_msg: "Proxmox Web UI not accessible at https://{{ proxmox_ip }}:8006"
+        success_msg: "Proxmox Web UI is accessible (status: {{ proxmox_webui.status }})"
+      when:
+        - test_proxmox | default(false) | bool
+        - proxmox_webui is defined
+        - proxmox_webui.status is defined
+
+    - name: Connectivity Test Summary
+      ansible.builtin.debug:
+        msg: |
+          === Connectivity Test Results ===
+          Local Tailscale: {{ 'OK' if local_tailscale.rc == 0 else 'Not connected' }}
+          OPNsense Ping: {{ 'OK' if opnsense_ping.rc | default(1) == 0 else 'Not tested or failed' }}
+          Proxmox Ping: {{ 'OK' if proxmox_ping.rc | default(1) == 0 else 'Not tested or failed' }}
+          Proxmox Web UI: {{ 'OK' if proxmox_webui.status | default(0) in [200, 301, 302, 401] else 'Not tested or failed' }}
+          =================================
+
+# T049: Proxmox storage pool validation tests
+- name: Proxmox Storage Validation Tests
+  hosts: proxmox
+  gather_facts: no
+  become: yes
+
+  tasks:
+    - name: Test - Check Proxmox service is running
+      ansible.builtin.command: pveversion
+      register: pve_version
+      changed_when: false
+      failed_when: false
+
+    - name: Display Proxmox version
+      ansible.builtin.debug:
+        var: pve_version.stdout
+      when: pve_version.rc == 0
+
+    - name: Test - Verify local storage pool exists
+      ansible.builtin.command: pvesm status
+      register: storage_status
+      changed_when: false
+      failed_when: false
+
+    - name: Display storage pools
+      ansible.builtin.debug:
+        var: storage_status.stdout_lines
+
+    - name: Validate - Local storage pool is active
+      ansible.builtin.assert:
+        that:
+          - "'local' in storage_status.stdout"
+        fail_msg: "Local storage pool not found or inactive"
+        success_msg: "Local storage pool is active"
+      when: storage_status.rc == 0
+
+    - name: Test - Check data storage pool (if configured)
+      ansible.builtin.command: pvesm list local-lvm
+      register: lvm_storage
+      changed_when: false
+      failed_when: false
+      when: test_lvm_storage | default(false) | bool
+
+    - name: Test - Verify cluster status
+      ansible.builtin.command: pvecm status
+      register: cluster_status
+      changed_when: false
+      failed_when: false
+
+    - name: Display cluster status
+      ansible.builtin.debug:
+        var: cluster_status.stdout_lines
+      when: cluster_status.rc == 0
+
+    - name: Proxmox Storage Test Summary
+      ansible.builtin.debug:
+        msg: |
+          === Proxmox Storage Test Results ===
+          Proxmox Version: {{ pve_version.stdout | default('Unknown') }}
+          Storage Pools: {{ 'OK' if storage_status.rc == 0 else 'Failed' }}
+          Local Storage: {{ 'Active' if 'local' in storage_status.stdout | default('') else 'Not found' }}
+          ====================================

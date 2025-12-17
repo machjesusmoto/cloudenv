@@ -1,0 +1,25 @@
+---
+# Common Role - Default Variables
+
+# System
+system_timezone: "UTC"
+system_locale: "en_US.UTF-8"
+
+# Package management
+apt_upgrade: true
+reboot_after_upgrade: false
+
+# SSH hardening
+ssh_port: 22
+ssh_permit_root_login: "prohibit-password"
+ssh_password_authentication: false
+ssh_pubkey_authentication: true
+ssh_public_key_path: ""
+
+# User management
+create_deploy_user: true
+lock_root_password: false
+users_to_remove: []
+
+# Host firewall
+configure_host_firewall: false

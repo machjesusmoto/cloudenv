@@ -1,0 +1,29 @@
+---
+# Libvirt Role - Default Variables
+
+# Storage configuration
+libvirt_images_path: "/var/lib/libvirt/images"
+libvirt_iso_path: "/var/lib/libvirt/iso"
+configure_storage_pools: true
+
+# Network configuration
+configure_libvirt_networks: true
+libvirt_network_name: "vmnet"
+libvirt_bridge_name: "virbr1"
+libvirt_network_gateway: "10.0.0.254"
+libvirt_network_netmask: "255.255.255.0"
+libvirt_network_cidr: "10.0.0.0/24"
+
+# Daemon configuration
+libvirt_listen_tcp: false
+libvirt_listen_tls: false
+libvirt_unix_sock_group: "libvirt"
+libvirt_unix_sock_ro_perms: "0777"
+libvirt_unix_sock_rw_perms: "0770"
+libvirt_auth_unix_ro: "none"
+libvirt_auth_unix_rw: "none"
+
+# QEMU configuration
+qemu_security_driver: "apparmor"
+qemu_user: "libvirt-qemu"
+qemu_group: "kvm"

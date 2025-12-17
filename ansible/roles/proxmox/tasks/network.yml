@@ -1,0 +1,65 @@
+---
+# Proxmox Network Configuration
+# T057: Static IP (10.0.0.10, gateway 10.0.0.1)
+# Constitution I: Security-First - Private network only, no public exposure
+
+- name: Display network configuration info
+  ansible.builtin.debug:
+    msg: |
+      === Proxmox Network Configuration ===
+      IP Address: {{ proxmox_ip }}/24
+      Gateway: {{ proxmox_gateway }}
+      DNS: {{ proxmox_dns_servers | join(', ') }}
+      ======================================
+
+- name: Configure network interfaces
+  ansible.builtin.template:
+    src: interfaces.j2
+    dest: /etc/network/interfaces
+    backup: yes
+    mode: '0644'
+  notify: Restart networking
+
+- name: Configure DNS resolvers
+  ansible.builtin.template:
+    src: resolv.conf.j2
+    dest: /etc/resolv.conf
+    mode: '0644'
+  notify: Restart networking
+
+- name: Create Proxmox network bridge (vmbr0)
+  ansible.builtin.blockinfile:
+    path: /etc/network/interfaces
+    block: |
+      # Proxmox bridge for VMs
+      auto vmbr0
+      iface vmbr0 inet static
+          address {{ proxmox_ip }}
+          netmask {{ proxmox_netmask }}
+          gateway {{ proxmox_gateway }}
+          bridge-ports eth0
+          bridge-stp off
+          bridge-fd 0
+    marker: "# {mark} ANSIBLE MANAGED - PROXMOX BRIDGE"
+    state: present
+  notify: Restart networking
+
+- name: Verify network connectivity to gateway
+  ansible.builtin.command: ping -c 3 {{ proxmox_gateway }}
+  register: gateway_ping
+  changed_when: false
+  failed_when: false
+
+- name: Display gateway connectivity status
+  ansible.builtin.debug:
+    msg: "Gateway {{ proxmox_gateway }} is {{ 'reachable' if gateway_ping.rc == 0 else 'NOT reachable' }}"
+
+- name: Verify internet connectivity
+  ansible.builtin.command: ping -c 3 1.1.1.1
+  register: internet_ping
+  changed_when: false
+  failed_when: false
+
+- name: Display internet connectivity status
+  ansible.builtin.debug:
+    msg: "Internet is {{ 'reachable' if internet_ping.rc == 0 else 'NOT reachable (expected - firewalled by OPNsense)' }}"

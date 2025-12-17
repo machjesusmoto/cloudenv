@@ -1,0 +1,48 @@
+---
+# OPNsense Role - Main Tasks
+# Constitution I: Security-First - Secure network perimeter
+
+- name: Wait for OPNsense to be accessible
+  ansible.builtin.wait_for:
+    host: "{{ opnsense_host }}"
+    port: 22
+    timeout: 300
+    delay: 10
+  delegate_to: localhost
+
+- name: Gather OPNsense facts
+  ansible.builtin.raw: |
+    uname -a && opnsense-version
+  register: opnsense_facts
+  changed_when: false
+
+- name: Display OPNsense version
+  ansible.builtin.debug:
+    var: opnsense_facts.stdout_lines
+
+- name: Include interface configuration
+  ansible.builtin.include_tasks: interfaces.yml
+  tags: [interfaces, network]
+
+- name: Include firewall configuration
+  ansible.builtin.include_tasks: firewall.yml
+  tags: [firewall, security]
+
+- name: Include SSH hardening
+  ansible.builtin.include_tasks: ssh.yml
+  tags: [ssh, security]
+  when: opnsense_ssh_enabled | bool
+
+- name: Include WebUI configuration
+  ansible.builtin.include_tasks: webui.yml
+  tags: [webui, security]
+
+- name: Verify OPNsense configuration
+  ansible.builtin.raw: |
+    pfctl -s info | head -5
+  register: pf_status
+  changed_when: false
+
+- name: Display firewall status
+  ansible.builtin.debug:
+    var: pf_status.stdout_lines

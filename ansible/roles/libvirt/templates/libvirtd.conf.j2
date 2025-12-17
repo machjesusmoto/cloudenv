@@ -1,0 +1,28 @@
+# Libvirt Daemon Configuration
+# Managed by Ansible - Do not edit manually
+# Constitution I: Security-First - Minimal exposure
+
+# Network connectivity
+listen_tls = {{ libvirt_listen_tls | int }}
+listen_tcp = {{ libvirt_listen_tcp | int }}
+
+# Unix socket permissions
+unix_sock_group = "{{ libvirt_unix_sock_group }}"
+unix_sock_ro_perms = "{{ libvirt_unix_sock_ro_perms }}"
+unix_sock_rw_perms = "{{ libvirt_unix_sock_rw_perms }}"
+
+# Authentication
+auth_unix_ro = "{{ libvirt_auth_unix_ro }}"
+auth_unix_rw = "{{ libvirt_auth_unix_rw }}"
+
+# Logging
+log_level = 3
+log_filters = "1:qemu 1:libvirt 3:security 3:event"
+log_outputs = "1:syslog:libvirtd"
+
+# Process settings
+max_clients = 20
+max_queued_clients = 5
+max_anonymous_clients = 5
+keepalive_interval = 5
+keepalive_count = 5

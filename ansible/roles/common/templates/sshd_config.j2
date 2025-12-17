@@ -1,0 +1,43 @@
+# SSH Server Configuration
+# Managed by Ansible - Do not edit manually
+
+# Network
+Port {{ ssh_port | default(22) }}
+AddressFamily any
+ListenAddress 0.0.0.0
+
+# Authentication
+PermitRootLogin {{ ssh_permit_root_login | default('prohibit-password') }}
+PubkeyAuthentication yes
+PasswordAuthentication {{ 'yes' if ssh_password_authentication | default(false) else 'no' }}
+PermitEmptyPasswords no
+ChallengeResponseAuthentication no
+
+# Security
+MaxAuthTries 3
+MaxSessions 10
+LoginGraceTime 60
+ClientAliveInterval 300
+ClientAliveCountMax 2
+
+# Logging
+SyslogFacility AUTH
+LogLevel VERBOSE
+
+# Features
+X11Forwarding no
+AllowTcpForwarding no
+AllowAgentForwarding yes
+PermitTunnel no
+PrintMotd no
+PrintLastLog yes
+TCPKeepAlive yes
+UseDNS no
+
+# Subsystems
+Subsystem sftp /usr/lib/openssh/sftp-server
+
+{% if ssh_allowed_users is defined and ssh_allowed_users | length > 0 %}
+# Allowed users
+AllowUsers {{ ssh_allowed_users | join(' ') }}
+{% endif %}

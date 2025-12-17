@@ -1,0 +1,98 @@
+# Common Variables for All Hosts
+# Core Infrastructure Setup
+#
+# Note: Sensitive values are in vault.yml (encrypted)
+
+#------------------------------------------------------------------------------
+# VPS Host Configuration
+#------------------------------------------------------------------------------
+
+vps_hostname: "{{ lookup('env', 'VPS_HOSTNAME') | default('vps.example.com', true) }}"
+vps_public_ip: "{{ lookup('env', 'VPS_PUBLIC_IP') }}"
+ssh_port: 22
+ssh_private_key_path: "~/.ssh/id_rsa"
+
+#------------------------------------------------------------------------------
+# Network Configuration
+#------------------------------------------------------------------------------
+
+private_network_cidr: "10.0.0.0/24"
+private_network_gateway: "10.0.0.1"
+private_network_dns: "10.0.0.1"
+
+# DHCP range for dynamic devices
+dhcp_range_start: "10.0.0.100"
+dhcp_range_end: "10.0.0.199"
+dhcp_lease_time: "24h"
+
+#------------------------------------------------------------------------------
+# OPNsense Configuration
+#------------------------------------------------------------------------------
+
+opnsense_lan_ip: "10.0.0.1"
+opnsense_web_port: 443
+opnsense_ssh_port: 22
+
+# Timezone
+opnsense_timezone: "America/Los_Angeles"
+
+# DNS upstream servers
+opnsense_dns_servers:
+  - "1.1.1.1"
+  - "8.8.8.8"
+
+#------------------------------------------------------------------------------
+# Proxmox Configuration
+#------------------------------------------------------------------------------
+
+proxmox_ip: "10.0.0.10"
+proxmox_web_port: 8006
+proxmox_gateway: "10.0.0.1"
+proxmox_dns: "10.0.0.1"
+
+# Proxmox storage
+proxmox_storage_name: "local-lvm"
+
+#------------------------------------------------------------------------------
+# Tailscale Configuration
+#------------------------------------------------------------------------------
+
+tailscale_advertised_routes:
+  - "10.0.0.0/24"
+
+tailscale_hostname: "opnsense-vps"
+tailscale_exit_node: false
+tailscale_accept_routes: false
+
+#------------------------------------------------------------------------------
+# Security Configuration
+#------------------------------------------------------------------------------
+
+# SSH hardening
+ssh_permit_root_login: "prohibit-password"
+ssh_password_authentication: false
+ssh_pubkey_authentication: true
+ssh_allowed_users:
+  - root
+  - deploy
+
+# Firewall defaults
+firewall_default_wan_policy: "block"
+firewall_log_blocked: true
+
+#------------------------------------------------------------------------------
+# System Configuration
+#------------------------------------------------------------------------------
+
+# Package management
+apt_upgrade: true
+apt_autoremove: true
+
+# NTP
+ntp_servers:
+  - "0.pool.ntp.org"
+  - "1.pool.ntp.org"
+
+# Locale
+system_locale: "en_US.UTF-8"
+system_timezone: "America/Los_Angeles"

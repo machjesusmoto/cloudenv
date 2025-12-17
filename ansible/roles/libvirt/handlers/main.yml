@@ -1,0 +1,19 @@
+---
+# Libvirt Role - Handlers
+
+- name: Restart libvirtd
+  ansible.builtin.systemd:
+    name: libvirtd
+    state: restarted
+
+- name: Reload libvirtd
+  ansible.builtin.systemd:
+    name: libvirtd
+    state: reloaded
+
+- name: Save iptables rules
+  ansible.builtin.shell: |
+    iptables-save > /etc/iptables/rules.v4
+  args:
+    creates: /etc/iptables/rules.v4
+  become: yes

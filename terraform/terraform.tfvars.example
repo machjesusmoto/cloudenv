@@ -1,0 +1,66 @@
+# Terraform Variables Example
+# Copy to terraform.tfvars and fill in values
+# DO NOT commit terraform.tfvars to Git
+
+#------------------------------------------------------------------------------
+# VPS Host Configuration
+#------------------------------------------------------------------------------
+
+vps_hostname = "vps.example.com"
+ssh_port     = 22
+
+#------------------------------------------------------------------------------
+# Storage Configuration
+#------------------------------------------------------------------------------
+
+storage_pool_name = "default"
+storage_pool_path = "/var/lib/libvirt/images"
+
+#------------------------------------------------------------------------------
+# Network Configuration
+#------------------------------------------------------------------------------
+
+private_network_name   = "vmnet-private"
+private_network_cidr   = "10.0.0.0/24"
+private_network_bridge = "virbr1"
+gateway_ip             = "10.0.0.1"
+
+#------------------------------------------------------------------------------
+# OPNsense Configuration
+#------------------------------------------------------------------------------
+
+opnsense_name          = "opnsense"
+opnsense_vcpus         = 2
+opnsense_memory_mb     = 4096
+opnsense_disk_gb       = 32
+opnsense_image_source  = "/var/lib/libvirt/images/OPNsense-24.7-vga-amd64.img"
+opnsense_wan_interface = "eth0"
+opnsense_lan_ip        = "10.0.0.1"
+
+#------------------------------------------------------------------------------
+# Proxmox Configuration
+#------------------------------------------------------------------------------
+
+proxmox_name          = "proxmox"
+proxmox_vcpus         = 8
+proxmox_memory_mb     = 49152  # 48GB
+proxmox_root_disk_gb  = 100
+proxmox_data_disk_gb  = 700
+proxmox_image_source  = "/var/lib/libvirt/images/proxmox-ve_8.1-1.iso"
+proxmox_ip            = "10.0.0.10"
+
+#------------------------------------------------------------------------------
+# SSH Configuration
+#------------------------------------------------------------------------------
+
+ssh_public_key_path = "~/.ssh/id_rsa.pub"
+
+# Or provide key directly:
+# ssh_public_key = "ssh-rsa AAAA..."
+
+#------------------------------------------------------------------------------
+# Tailscale Configuration (SENSITIVE - use vault instead)
+#------------------------------------------------------------------------------
+
+# tailscale_auth_key = "tskey-auth-..."  # DO NOT SET HERE - use Ansible Vault
+tailscale_advertised_routes = ["10.0.0.0/24"]

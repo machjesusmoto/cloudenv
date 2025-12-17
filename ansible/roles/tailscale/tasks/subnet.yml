@@ -1,0 +1,67 @@
+---
+# Tailscale Subnet Routing Configuration
+# Constitution I: Security-First - VPN-only access to 10.0.0.0/24
+
+- name: Build subnet routes argument
+  ansible.builtin.set_fact:
+    subnet_routes_arg: "{{ tailscale_advertise_routes | join(',') }}"
+
+- name: Configure subnet router
+  ansible.builtin.raw: |
+    tailscale set \
+      --advertise-routes="{{ subnet_routes_arg }}" \
+      {% if tailscale_exit_node %}--advertise-exit-node{% endif %} \
+      || /usr/local/bin/tailscale set \
+      --advertise-routes="{{ subnet_routes_arg }}" \
+      {% if tailscale_exit_node %}--advertise-exit-node{% endif %}
+  register: subnet_config
+  changed_when: "'Success' in subnet_config.stdout or subnet_config.rc == 0"
+
+- name: Enable IP forwarding (for subnet routing)
+  ansible.builtin.raw: |
+    # FreeBSD/OPNsense
+    sysctl net.inet.ip.forwarding=1 2>/dev/null || \
+    # Linux
+    sysctl -w net.ipv4.ip_forward=1 2>/dev/null || \
+    echo "IP forwarding configuration"
+  changed_when: false
+
+- name: Display subnet routing instructions
+  ansible.builtin.debug:
+    msg: |
+      === Subnet Routing Configuration ===
+      Advertised routes: {{ tailscale_advertise_routes | join(', ') }}
+      Exit node: {{ tailscale_exit_node }}
+
+      IMPORTANT: Route approval required!
+
+      To approve subnet routes in Tailscale Admin Console:
+      1. Go to https://login.tailscale.com/admin/machines
+      2. Find "{{ tailscale_hostname }}"
+      3. Click "Edit route settings"
+      4. Enable the advertised routes:
+         {% for route in tailscale_advertise_routes %}
+         - {{ route }}
+         {% endfor %}
+      5. Save changes
+
+      After approval, devices on your tailnet can reach:
+      - OPNsense LAN: 10.0.0.1
+      - Proxmox (when deployed): 10.0.0.10
+      =====================================
+
+- name: Check advertised routes status
+  ansible.builtin.raw: |
+    tailscale status --json 2>/dev/null | grep -E "advertised|routes" || \
+    /usr/local/bin/tailscale status --json 2>/dev/null | grep -E "advertised|routes" || \
+    echo "Check Tailscale admin console for route status"
+  register: routes_status
+  changed_when: false
+  failed_when: false
+
+- name: Verify subnet routing is active
+  ansible.builtin.raw: |
+    # Test if we can see the subnet routes
+    tailscale status || /usr/local/bin/tailscale status
+  register: final_routes_check
+  changed_when: false

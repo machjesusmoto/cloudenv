@@ -71,3 +71,4 @@ pve-*.tar
 # ISO images (too large for git)
 *.iso
 *.img
+.playwright-mcp/

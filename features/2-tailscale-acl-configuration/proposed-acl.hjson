@@ -1,0 +1,171 @@
+// Tailscale ACL Policy - CloudEnv Integration
+// Generated: 2025-12-23
+//
+// Goals:
+// 1. network-homenet devices can access network-cloud
+// 2. OPNsense is home LAN subnet router
+// 3. Devices prefer LAN routes when on same network (Tailscale handles automatically)
+// 4. Subnet routes auto-approved via tags (no manual approval)
+
+{
+	// Tag ownership - who can apply each tag
+	"tagOwners": {
+		// Client device types
+		"tag:client-stationary":    ["autogroup:admin"],
+		"tag:client-roaming":       ["autogroup:admin"],
+		"tag:client-restricted":    ["autogroup:admin"],
+		"tag:client-trusted-guest": ["autogroup:admin"],
+
+		// Network zones
+		"tag:network-homenet":      ["autogroup:owner"],
+		"tag:network-cloud":        ["autogroup:owner"],
+		"tag:network-edge":         ["autogroup:owner"],
+		"tag:network-inside":       ["autogroup:admin"],
+
+		// Infrastructure
+		"tag:infra-services":       ["autogroup:owner"],
+		"tag:infra-applications":   ["autogroup:owner"],
+		"tag:infra-mgmt":           ["autogroup:owner"],
+
+		// Special
+		"tag:exit-node-allowed":    ["autogroup:admin"],
+		"tag:sylvia":               ["autogroup:admin"],
+	},
+
+	// Auto-approve subnet routes from tagged devices
+	// This is the KEY change - enables --accept-routes to work safely
+	"autoApprovers": {
+		"routes": {
+			// CloudEnv private network (pve-vps)
+			"10.0.0.0/24": ["tag:network-cloud", "tag:infra-services"],
+
+			// Home LAN subnets (OPNsense)
+			"10.0.2.0/24":     ["tag:network-edge", "tag:network-homenet"],
+			"192.168.0.0/24":  ["tag:network-edge", "tag:network-homenet"],
+			"192.168.1.0/24":  ["tag:network-edge", "tag:network-homenet"],
+			"192.168.3.0/24":  ["tag:network-edge", "tag:network-homenet"],
+			"192.168.8.0/24":  ["tag:network-edge", "tag:network-homenet"],
+			"192.168.12.0/24": ["tag:network-edge", "tag:network-homenet"],
+			"192.168.13.0/24": ["tag:network-edge", "tag:network-homenet"],
+			"192.168.16.0/24": ["tag:network-edge", "tag:network-homenet"],
+			"192.168.54.0/24": ["tag:network-edge", "tag:network-homenet"],
+		},
+
+		// Exit node approval
+		"exitNode": ["tag:network-edge"],
+	},
+
+	// Access control grants
+	"grants": [
+		// ============================================
+		// Infrastructure - full mesh connectivity
+		// ============================================
+		{
+			"src": ["tag:infra-services", "tag:network-edge"],
+			"dst": ["*"],
+			"ip":  ["*"],
+		},
+
+		// ============================================
+		// Client devices - based on type
+		// ============================================
+
+		// Stationary clients (always on known network) - full access
+		{
+			"src": ["tag:client-stationary"],
+			"dst": ["*"],
+			"ip":  ["*"],
+		},
+
+		// Roaming clients - full access when tagged with network-homenet
+		{
+			"src": ["tag:client-roaming", "tag:network-homenet"],
+			"dst": ["*"],
+			"ip":  ["*"],
+		},
+
+		// Restricted clients - limited access
+		{
+			"src": ["tag:client-restricted"],
+			"dst": ["tag:infra-services"],
+			"ip":  ["*"],
+		},
+
+		// ============================================
+		// Network zone connectivity
+		// ============================================
+
+		// Home network can access cloud network (and vice versa)
+		{
+			"src": ["tag:network-homenet"],
+			"dst": ["tag:network-cloud"],
+			"ip":  ["*"],
+		},
+		{
+			"src": ["tag:network-cloud"],
+			"dst": ["tag:network-homenet"],
+			"ip":  ["*"],
+		},
+
+		// ============================================
+		// Special access
+		// ============================================
+
+		// Trusted guests - access to specific services
+		{
+			"src": ["tag:client-trusted-guest"],
+			"dst": ["tag:infra-services"],
+			"ip":  ["*"],
+		},
+
+		// Sylvia (guest) - outbound only via exit node, no internal access
+		{
+			"src": ["tag:sylvia"],
+			"dst": ["autogroup:internet"],
+			"ip":  ["*"],
+		},
+	],
+
+	// SSH access rules
+	"ssh": [
+		// Owner SSH to infrastructure (tags allowed with "accept" action)
+		{
+			"action": "accept",
+			"src":    ["autogroup:owner"],
+			"dst":    ["tag:infra-services", "tag:network-edge"],
+			"users":  ["root", "autogroup:nonroot"],
+		},
+		// Members SSH to own devices with check
+		{
+			"action": "check",
+			"src":    ["autogroup:member"],
+			"dst":    ["autogroup:self"],
+			"users":  ["autogroup:nonroot", "root"],
+		},
+	],
+
+	// ACL validation tests
+	"tests": [
+		// Workstation can reach cloudenv
+		{
+			"src":    "tag:client-stationary",
+			"accept": ["tag:network-cloud:443", "tag:infra-services:22"],
+		},
+		// Home network can reach cloud
+		{
+			"src":    "tag:network-homenet",
+			"accept": ["tag:network-cloud:443"],
+		},
+		// Cloud can reach home
+		{
+			"src":    "tag:network-cloud",
+			"accept": ["tag:network-homenet:22"],
+		},
+		// Restricted client limited access
+		{
+			"src":    "tag:client-restricted",
+			"accept": ["tag:infra-services:443"],
+			"deny":   ["tag:network-homenet:22"],
+		},
+	],
+}

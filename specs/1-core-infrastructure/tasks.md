@@ -1,268 +1,141 @@
 # Tasks: Core Infrastructure Setup
 
+**Status**: ✅ COMPLETE (2025-12-23)
 **Input**: Design documents from `/specs/1-core-infrastructure/`
-**Prerequisites**: plan.md ✅, spec.md ✅, research.md ✅, data-model.md ✅, contracts/ ✅
+**Deployment**: Manual with documentation (see `quickstart.md`)
 
-**Tests**: Infrastructure validation tests included per Constitution IV (Test Coverage Discipline).
+## Actual Deployment Summary
 
-**Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
+The original plan included Ansible automation and OPNsense VM. The actual deployment was simplified:
 
-## Format: `[ID] [P?] [Story] Description`
-
-- **[P]**: Can run in parallel (different files, no dependencies)
-- **[Story]**: Which user story this task belongs to (US1, US2, US3)
-- Include exact file paths in descriptions
-
-## Path Conventions
-
-Per `plan.md` structure:
-- **Terraform**: `terraform/` (modules in `terraform/modules/`)
-- **Ansible**: `ansible/` (roles in `ansible/roles/`, playbooks in `ansible/playbooks/`)
-- **Scripts**: `scripts/`
-- **Docs**: `docs/`
+- **Architecture**: Proxmox VE directly on Debian 13 host
+- **VPN**: Tailscale on Proxmox host (not in VM)
+- **Edge Protection**: SSDNodes provider firewall
+- **Documentation**: Complete step-by-step guide in `quickstart.md`
 
 ---
 
-## Phase 1: Setup (Shared Infrastructure)
+## Phase 1: Initial VPS Setup ✅
 
-**Purpose**: Project initialization and repository structure
+| Task | Description | Status |
+|------|-------------|--------|
+| T001 | SSH to VPS via public IP | ✅ Complete |
+| T002 | Configure hostname (`pve.vps.local`) | ✅ Complete |
+| T003 | Update `/etc/hosts` with hostname | ✅ Complete |
+| T004 | Disable SSH password authentication | ✅ Complete |
+| T005 | Restart SSH service | ✅ Complete |
 
-- [x] T001 Create repository structure per plan.md (terraform/, ansible/, scripts/, docs/)
-- [x] T002 [P] Create `terraform/versions.tf` with required providers (libvirt >= 0.7.0)
-- [x] T003 [P] Create `terraform/variables.tf` with all input variables from data-model.md
-- [x] T004 [P] Create `terraform/terraform.tfvars.example` with documented defaults
-- [x] T005 [P] Create `ansible/ansible.cfg` with configuration (inventory, vault, SSH settings)
-- [x] T006 [P] Create `ansible/inventory/hosts.yml` template for hypervisors/firewalls/proxmox groups
-- [x] T007 [P] Create `ansible/inventory/group_vars/all.yml` with common variables
-- [x] T008 Create `ansible/inventory/group_vars/vault.yml.example` with secret placeholders
-- [x] T009 [P] Create `docs/README.md` with project overview and quickstart reference
-- [x] T010 Create `.gitignore` for terraform state, vault passwords, sensitive files
+**Validation**: SSH key auth working, hostname set
 
 ---
 
-## Phase 2: Foundational (Blocking Prerequisites)
+## Phase 2: Install Proxmox VE 9 ✅
 
-**Purpose**: VPS bootstrap and libvirt hypervisor setup - MUST complete before any VM deployment
+| Task | Description | Status |
+|------|-------------|--------|
+| T006 | Add Proxmox VE 9 repository GPG key | ✅ Complete |
+| T007 | Add pve-no-subscription repository | ✅ Complete |
+| T008 | Run apt-get update | ✅ Complete |
+| T009 | Install proxmox-ve, postfix, open-iscsi, chrony | ✅ Complete |
+| T010 | Disable enterprise repository (no subscription) | ✅ Complete |
 
-**⚠️ CRITICAL**: No user story work can begin until this phase is complete
-
-- [x] T011 Create `ansible/roles/common/` role structure (tasks/, handlers/, defaults/, templates/)
-- [x] T012 [P] Implement `ansible/roles/common/tasks/main.yml` with SSH hardening, package updates
-- [x] T013 [P] Implement `ansible/roles/common/tasks/users.yml` with deploy user creation
-- [x] T014 Create `ansible/roles/libvirt/` role structure
-- [x] T015 [P] Implement `ansible/roles/libvirt/tasks/main.yml` with KVM/QEMU/libvirt installation
-- [x] T016 [P] Implement `ansible/roles/libvirt/tasks/storage.yml` with storage pool creation at `/var/lib/libvirt/images`
-- [x] T017 Implement `ansible/roles/libvirt/tasks/network.yml` with private network bridge (virbr1, 10.0.0.0/24)
-- [x] T018 Create `ansible/playbooks/bootstrap.yml` orchestrating common + libvirt roles
-- [x] T019 [P] Create `terraform/modules/libvirt-network/main.tf` with private network resource
-- [x] T020 [P] Create `terraform/modules/libvirt-network/variables.tf` with network configuration inputs
-- [x] T021 [P] Create `terraform/modules/libvirt-network/outputs.tf` with network ID output
-- [x] T022 Create `scripts/deploy.sh` with initial VPS bootstrap execution
-
-**Checkpoint**: VPS has libvirt operational, storage pool created, private network defined - VM deployment can begin
+**Validation**: Proxmox VE 9.1.2 installed, `pveversion` returns version
 
 ---
 
-## Phase 3: User Story 1 - Secure Network Perimeter (Priority: P1) 🎯 MVP
+## Phase 3: Configure Routed Networking ✅
 
-**Goal**: OPNsense firewall captures public IP, creates secure network boundary
+| Task | Description | Status |
+|------|-------------|--------|
+| T011 | Create `/etc/network/interfaces` with vmbr0 (public) | ✅ Complete |
+| T012 | Add vmbr1 (private 10.0.0.0/24) with NAT rules | ✅ Complete |
+| T013 | Configure IP forwarding in vmbr1 post-up | ✅ Complete |
+| T014 | Configure GRUB for Proxmox kernel (GRUB_DEFAULT="1>2") | ✅ Complete |
+| T015 | Run update-grub | ✅ Complete |
+| T016 | Reboot to apply network config and kernel | ✅ Complete |
 
-**Independent Test**: Verify OPNsense owns public IP, responds to ping, blocks unauthorized traffic per `contracts/firewall-rules.md`
-
-### Tests for User Story 1
-
-- [x] T023 [P] [US1] Create `ansible/tests/security.yml` with firewall rule validation tests
-- [x] T024 [P] [US1] Add port scan test to verify default-deny on WAN interface
-
-### Implementation for User Story 1
-
-- [x] T025 [P] [US1] Create `terraform/modules/opnsense-vm/main.tf` with OPNsense VM resource (macvtap WAN, virbr1 LAN)
-- [x] T026 [P] [US1] Create `terraform/modules/opnsense-vm/variables.tf` with VM configuration (2 vCPU, 4096MB RAM, 32GB disk)
-- [x] T027 [P] [US1] Create `terraform/modules/opnsense-vm/outputs.tf` with WAN IP, LAN IP outputs
-- [x] T028 [US1] Create `terraform/modules/opnsense-vm/cloud-init.cfg` for initial bootstrap
-- [x] T029 [US1] Add OPNsense module call to `terraform/main.tf`
-- [x] T030 Create `ansible/roles/opnsense/` role structure
-- [x] T031 [P] [US1] Implement `ansible/roles/opnsense/tasks/main.yml` with OPNsense package installation
-- [x] T032 [P] [US1] Create `ansible/roles/opnsense/templates/config.xml.j2` with base OPNsense configuration
-- [x] T033 [US1] Implement `ansible/roles/opnsense/tasks/firewall.yml` with rules per `contracts/firewall-rules.md`
-- [x] T034 [US1] Implement `ansible/roles/opnsense/tasks/interfaces.yml` with WAN (DHCP) and LAN (10.0.0.1) setup
-- [x] T035 [US1] Create `ansible/playbooks/opnsense.yml` orchestrating OPNsense deployment
-- [x] T036 [US1] Add OPNsense deployment to `scripts/deploy.sh`
-
-**Checkpoint**: OPNsense VM running, public IP captured, firewall rules active, private network routing operational
+**Validation**:
+- vmbr0: 172.93.48.55/24 (public)
+- vmbr1: 10.0.0.1/24 (private)
+- Kernel: 6.8.12-17-pve
 
 ---
 
-## Phase 4: User Story 2 - VPN Site-to-Site Connectivity (Priority: P2)
+## Phase 4: Install Tailscale ✅
 
-**Goal**: Tailscale VPN connects VPS private network to existing home tailnet
+| Task | Description | Status |
+|------|-------------|--------|
+| T017 | Add Tailscale repository GPG key | ✅ Complete |
+| T018 | Add Tailscale apt repository | ✅ Complete |
+| T019 | Install tailscale package | ✅ Complete |
+| T020 | Configure IP forwarding for Tailscale | ✅ Complete |
+| T021 | Run `tailscale up --advertise-routes=10.0.0.0/24` | ✅ Complete |
+| T022 | Authenticate via browser URL | ✅ Complete |
 
-**Independent Test**: From home network device, successfully ping 10.0.0.1 (OPNsense LAN) and verify subnet route advertised
-
-### Tests for User Story 2
-
-- [x] T037 [P] [US2] Create `ansible/tests/connectivity.yml` with Tailscale status and route verification
-- [x] T038 [P] [US2] Add home-to-VPS ping test (10.0.0.0/24 accessibility)
-
-### Implementation for User Story 2
-
-- [x] T039 Create `ansible/roles/tailscale/` role structure
-- [x] T040 [P] [US2] Implement `ansible/roles/tailscale/tasks/main.yml` with Tailscale plugin installation on OPNsense
-- [x] T041 [US2] Implement `ansible/roles/tailscale/tasks/auth.yml` with auth key authentication (from vault)
-- [x] T042 [US2] Implement `ansible/roles/tailscale/tasks/subnet.yml` with subnet router configuration (advertise 10.0.0.0/24)
-- [x] T043 [P] [US2] Create `ansible/roles/tailscale/templates/tailscale.conf.j2` with exit node and route settings
-- [x] T044 [US2] Implement `ansible/roles/opnsense/tasks/tailscale-firewall.yml` with Tailscale interface rules
-- [x] T045 [US2] Create `ansible/playbooks/tailscale.yml` orchestrating Tailscale integration
-- [x] T046 [US2] Add Tailscale deployment to `scripts/deploy.sh` (after OPNsense)
-- [x] T047 [US2] Document Tailscale admin console route approval step in `specs/1-core-infrastructure/quickstart.md`
-
-**Checkpoint**: Tailscale connected, subnet route approved, home devices can reach VPS private network
+**Validation**: Tailscale connected, advertising 10.0.0.0/24
 
 ---
 
-## Phase 5: User Story 3 - Proxmox VE Deployment (Priority: P3)
+## Phase 5: Configure Provider Firewall ✅
 
-**Goal**: Proxmox VE running on private network, accessible via Tailscale from home
+| Task | Description | Status |
+|------|-------------|--------|
+| T023 | Log in to SSDNodes portal | ✅ Complete |
+| T024 | Enable firewall addon | ✅ Complete |
+| T025 | Add rule: Allow TCP 22 from admin IP | ✅ Complete |
+| T026 | Add rule: Allow ICMP from any | ✅ Complete |
+| T027 | Set default deny for all other traffic | ✅ Complete |
 
-**Independent Test**: Access Proxmox web UI at https://10.0.0.10:8006 from home network, create and start a test VM
-
-### Tests for User Story 3
-
-- [x] T048 [P] [US3] Add Proxmox web UI accessibility test to `ansible/tests/connectivity.yml`
-- [x] T049 [P] [US3] Add Proxmox storage pool validation test
-
-### Implementation for User Story 3
-
-- [x] T050 [P] [US3] Create `terraform/modules/proxmox-vm/main.tf` with Proxmox VM resource (8 vCPU, 49152MB RAM)
-- [x] T051 [P] [US3] Create `terraform/modules/proxmox-vm/variables.tf` with VM configuration
-- [x] T052 [P] [US3] Create `terraform/modules/proxmox-vm/outputs.tf` with management IP output
-- [x] T053 [US3] Create `terraform/modules/proxmox-vm/disks.tf` with root (100GB) and data (700GB) volumes
-- [x] T054 [US3] Add Proxmox module call to `terraform/main.tf`
-- [x] T055 Create `ansible/roles/proxmox/` role structure
-- [x] T056 [P] [US3] Implement `ansible/roles/proxmox/tasks/main.yml` with Proxmox VE installation
-- [x] T057 [P] [US3] Implement `ansible/roles/proxmox/tasks/network.yml` with static IP (10.0.0.10, gateway 10.0.0.1)
-- [x] T058 [US3] Implement `ansible/roles/proxmox/tasks/storage.yml` with storage pool configuration
-- [x] T059 [US3] Implement `ansible/roles/proxmox/tasks/users.yml` with root password from vault
-- [x] T060 [US3] Create `ansible/playbooks/proxmox.yml` orchestrating Proxmox deployment
-- [x] T061 [US3] Add Proxmox deployment to `scripts/deploy.sh` (after Tailscale)
-
-**Checkpoint**: Proxmox web UI accessible at 10.0.0.10:8006 via Tailscale, storage pools configured, ready for VM creation
+**Validation**: Only SSH (22) and ICMP accessible from internet
 
 ---
 
-## Phase 6: Polish & Cross-Cutting Concerns
+## Phase 6: Approve Tailscale Subnet Route ✅
 
-**Purpose**: Documentation, validation scripts, and production hardening
+| Task | Description | Status |
+|------|-------------|--------|
+| T028 | Go to Tailscale admin console | ✅ Complete |
+| T029 | Find `pve-vps` machine | ✅ Complete |
+| T030 | Edit route settings | ✅ Complete |
+| T031 | Enable 10.0.0.0/24 subnet route | ✅ Complete |
+| T032 | Save changes | ✅ Complete |
 
-- [x] T062 [P] Create `terraform/outputs.tf` with all infrastructure outputs (IPs, network IDs)
-- [x] T063 [P] Create `ansible/playbooks/site.yml` as master playbook orchestrating all roles
-- [x] T064 [P] Implement `scripts/test.sh` running all ansible tests (connectivity + security)
-- [x] T065 [P] Implement `scripts/destroy.sh` with terraform destroy and cleanup
-- [x] T066 Create `scripts/backup.sh` for OPNsense config export and state backup
-- [x] T067 [P] Update `specs/1-core-infrastructure/quickstart.md` with verified deployment steps
-- [x] T068 Create `ansible/playbooks/harden.yml` with temporary SSH access removal (--tags disable-direct-ssh)
-- [x] T069 [P] Add ansible-lint and terraform validate to CI/CD workflow (.github/workflows/)
-- [ ] T070 Final validation: Run complete test suite per `scripts/test.sh` (requires deployed infrastructure)
-- [x] T071 [P] Create `ansible/playbooks/rotate-credentials.yml` for automated credential rotation (Tailscale auth key, vault password reminder)
-- [x] T072 Create `docs/disaster-recovery-runbook.md` and validate SC-006 by performing test recovery to verify 2-hour RTO
-- [x] T073 [P] Implement `ansible/roles/opnsense/tasks/logging.yml` with syslog configuration per Constitution I audit trail requirements
+**Validation**: Subnet route approved and advertised
 
 ---
 
-## Dependencies & Execution Order
+## Final Validation ✅
 
-### Phase Dependencies
-
-- **Setup (Phase 1)**: No dependencies - can start immediately
-- **Foundational (Phase 2)**: Depends on Setup completion - BLOCKS all user stories
-- **User Stories (Phase 3-5)**: All depend on Foundational phase completion
-  - US1 (OPNsense) must complete before US2 (Tailscale) - Tailscale runs on OPNsense
-  - US2 (Tailscale) must complete before US3 (Proxmox) - Proxmox only accessible via VPN
-- **Polish (Phase 6)**: Depends on all user stories being complete
-
-### User Story Dependencies
-
-```
-Phase 1 (Setup)
-    │
-    ▼
-Phase 2 (Foundational: VPS + libvirt)
-    │
-    ▼
-Phase 3 (US1: OPNsense) ─── Must complete first
-    │
-    ▼
-Phase 4 (US2: Tailscale) ─── Requires OPNsense operational
-    │
-    ▼
-Phase 5 (US3: Proxmox) ─── Requires VPN for access
-    │
-    ▼
-Phase 6 (Polish)
-```
-
-### Within Each Phase
-
-- Tasks marked [P] can run in parallel within that phase
-- Terraform modules before main.tf integration
-- Ansible roles before playbooks
-- Tests before (or alongside) implementation per TDD lite approach
-
-### Parallel Opportunities
-
-**Phase 1** (all [P] tasks can run simultaneously):
-```
-T002, T003, T004, T005, T006, T007, T009 → all in parallel
-```
-
-**Phase 2** (models in parallel, then integration):
-```
-T012, T013 (common role) → parallel
-T015, T016 (libvirt tasks) → parallel
-T019, T020, T021 (terraform module) → parallel
-```
-
-**Phase 3** (Terraform and Ansible modules in parallel):
-```
-T025, T026, T027 (terraform module) → parallel
-T031, T032 (ansible tasks) → parallel
-```
+| Check | Command | Result |
+|-------|---------|--------|
+| Tailscale access | `ping 100.84.93.46` | ✅ Pass |
+| Proxmox Web UI | `curl -sk https://100.84.93.46:8006` | ✅ Pass |
+| SSH via Tailscale | `ssh root@100.84.93.46 'pveversion'` | ✅ Pass |
+| Subnet route | `ping 10.0.0.1` | ⚠️ Client-dependent |
 
 ---
 
-## Implementation Strategy
+## Deployed Infrastructure
 
-### MVP First (User Story 1 Only)
-
-1. Complete Phase 1: Setup
-2. Complete Phase 2: Foundational (VPS bootstrap + libvirt)
-3. Complete Phase 3: User Story 1 (OPNsense)
-4. **STOP and VALIDATE**: Verify firewall captures public IP, rules enforced
-5. Secure perimeter established - can pause here if needed
-
-### Full Deployment (All Stories)
-
-1. Setup → Foundational → OPNsense (MVP checkpoint)
-2. Add Tailscale → Test home-to-VPS connectivity
-3. Add Proxmox → Test web UI access via VPN
-4. Polish → Production-ready infrastructure
-
-### Time Estimates (per Success Criteria SC-005)
-
-- Phase 1: ~30 minutes
-- Phase 2: ~1 hour
-- Phase 3: ~1 hour
-- Phase 4: ~30 minutes
-- Phase 5: ~45 minutes
-- Phase 6: ~15 minutes
-- **Total**: ~4 hours (aligns with SC-005 target)
+| Component | Value |
+|-----------|-------|
+| Public IP | 172.93.48.55 |
+| Tailscale IP | 100.84.93.46 |
+| Private Gateway | 10.0.0.1 |
+| Proxmox Version | 9.1.2 |
+| Kernel | 6.8.12-17-pve |
+| Tailscale Version | 1.92.3 |
 
 ---
 
 ## Notes
 
-- Constitution compliance verified in plan.md (all principles PASS)
-- Network contracts defined in `contracts/network-topology.md` and `contracts/firewall-rules.md`
-- Secrets managed via Ansible Vault per Constitution I
-- All configuration in Git per Constitution III
-- Test coverage focuses on critical paths per Constitution IV
+1. **Simplified Architecture**: Original plan included OPNsense VM and Ansible automation. Actual deployment is simpler and more efficient.
+
+2. **Documentation-Driven**: All steps documented in `quickstart.md` for reproducibility.
+
+3. **Subnet Route Note**: Subnet route (10.0.0.0/24) requires client-side configuration:
+   - Client must run `tailscale up --accept-routes`
+   - Tailscale ACLs must allow subnet access
+
+4. **Future Automation**: If needed, the documented steps can be converted to Ansible playbooks for automation.

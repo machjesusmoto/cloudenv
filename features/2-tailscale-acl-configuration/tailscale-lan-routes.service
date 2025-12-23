@@ -1,0 +1,21 @@
+# Tailscale LAN Route Priority Fix
+#
+# Installation:
+#   sudo cp tailscale-routing-fix.sh /usr/local/bin/
+#   sudo cp tailscale-lan-routes.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now tailscale-lan-routes
+
+[Unit]
+Description=Tailscale LAN Route Priority Fix
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/tailscale-routing-fix.sh add
+ExecStop=/usr/local/bin/tailscale-routing-fix.sh remove
+
+[Install]
+WantedBy=multi-user.target

@@ -4,206 +4,146 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-CloudEnv is an Infrastructure as Code (IaC) project for deploying secure cloud infrastructure on SSDNodes VPS. The architecture consists of:
+CloudEnv is a multi-feature infrastructure project for deploying secure cloud services on SSDNodes VPS. The project is organized by feature, with each feature having its own specification and implementation.
 
-- **OPNsense Firewall**: Captures the VPS public IP via macvtap, provides NAT, firewall rules, and Tailscale VPN
-- **Proxmox VE**: Virtualization platform on private network (10.0.0.0/24), accessible only via Tailscale
-- **Tailscale**: Site-to-site VPN connecting VPS private network to home tailnet
+### Current Architecture (Feature 1: Core Infrastructure)
 
 ```
-Internet ──► Public IPv4 ──► OPNsense (WAN) ──► Private Network (10.0.0.0/24)
-                                    │                      │
-                                    │                      └──► Proxmox (10.0.0.10)
-                                    │
-                                    └──► Tailscale ──► Home Network
+Internet ──► SSDNodes Provider Firewall ──► Proxmox VE Host (<VPS_PUBLIC_IP>)
+                                                    │
+                                                    ├── vmbr0 (public: <VPS_PUBLIC_IP>/24)
+                                                    ├── vmbr1 (private: 10.0.0.1/24)
+                                                    ├── Tailscale (100.84.93.46)
+                                                    │       └── advertises 10.0.0.0/24
+                                                    └── Future VMs on vmbr1
+
+Home Network ──► Tailscale ──► pve-vps (100.84.93.46) ──► 10.0.0.0/24
+```
+
+**Deployed Components**:
+- **Proxmox VE 9.1.2**: Virtualization platform directly on Debian 13 host
+- **Tailscale 1.92.3**: Subnet router on host, advertising 10.0.0.0/24
+- **SSDNodes Provider Firewall**: Edge protection (default deny, SSH from admin IP only)
+
+## Directory Structure
+
+```
+cloudenv/
+├── features/                          # Feature-based organization
+│   ├── 1-core-infrastructure/         # ✅ Complete - Proxmox + Tailscale
+│   │   ├── spec.md                    # Requirements and user stories
+│   │   ├── plan.md                    # Implementation plan
+│   │   ├── tasks.md                   # Task breakdown and status
+│   │   ├── quickstart.md              # Deployment guide
+│   │   └── contracts/                 # Network topology, firewall rules
+│   └── 2-xxx/                         # Future features
+│
+├── shared/                            # Shared infrastructure code
+│   ├── terraform/                     # Reusable Terraform modules
+│   └── ansible/                       # Reusable Ansible roles
+│
+├── archive/                           # Archived/unused designs
+│   └── original-opnsense-design/      # Initial OPNsense-based design (unused)
+│
+├── scripts/                           # Project-wide scripts
+├── docs/                              # Project documentation
+└── CLAUDE.md                          # This file
 ```
 
 ## Constitution Principles
 
 This project follows a formal constitution (`.specify/memory/constitution.md`) with five core principles:
 
-1. **Security-First Design**: Network isolation, encrypted transit, least privilege, credential management via Ansible Vault
-2. **Reliability Through Simplicity**: Minimal components, documented state, graceful failure, idempotent operations
-3. **Infrastructure as Code**: All config declarative, version controlled, reproducible - no manual snowflakes
-4. **Test Coverage Discipline**: Validation before apply, contract tests, integration tests for critical paths
+1. **Security-First Design**: Network isolation, encrypted transit, least privilege
+2. **Reliability Through Simplicity**: Minimal components, documented state, graceful failure
+3. **Infrastructure as Code**: All config declarative, version controlled, reproducible
+4. **Test Coverage Discipline**: Validation before apply, contract tests, integration tests
 5. **Extensibility by Design**: Modular structure, standard interfaces, parameterized configuration
 
-## Common Commands
+## Feature Development Workflow
 
-### Full Deployment
+### Creating a New Feature
 
-```bash
-# Initial setup
-cp terraform/terraform.tfvars.example terraform/terraform.tfvars
-cp ansible/inventory/group_vars/vault.yml.example ansible/inventory/group_vars/vault.yml
-ansible-vault encrypt ansible/inventory/group_vars/vault.yml
+1. Create feature directory:
+   ```bash
+   mkdir -p features/N-feature-name
+   ```
 
-# Full deployment (interactive, with confirmations)
-./scripts/deploy.sh deploy
+2. Use spec-kit commands to initialize:
+   ```
+   /speckit.specify    # Create feature specification
+   /speckit.plan       # Generate implementation plan
+   /speckit.tasks      # Generate task breakdown
+   /speckit.implement  # Execute tasks
+   ```
 
-# Individual phases
-./scripts/deploy.sh bootstrap       # Initial VPS setup with libvirt
-./scripts/deploy.sh terraform init  # Initialize Terraform
-./scripts/deploy.sh terraform plan  # Show planned changes
-./scripts/deploy.sh terraform apply # Apply infrastructure
-./scripts/deploy.sh opnsense        # Configure OPNsense firewall
-./scripts/deploy.sh tailscale       # Deploy Tailscale VPN
-./scripts/deploy.sh proxmox         # Deploy Proxmox VE
-```
+3. Each feature should contain:
+   - `spec.md` - User stories and requirements
+   - `plan.md` - Implementation plan with constitution compliance
+   - `tasks.md` - Phased task breakdown
+   - `quickstart.md` - Deployment/usage guide
+   - `contracts/` - Interface contracts (optional)
 
-### Testing
+### Feature Naming Convention
 
-```bash
-# Run all tests
-./scripts/test.sh
+Features are numbered sequentially: `N-descriptive-name`
+- `1-core-infrastructure` - Base VPS setup
+- `2-kubernetes-cluster` - K8s deployment (example)
+- `3-monitoring-stack` - Observability (example)
 
-# Specific test suites
-./scripts/test.sh security        # Firewall rule validation
-./scripts/test.sh connectivity    # Tailscale route tests
-./scripts/test.sh proxmox         # Proxmox accessibility
+## Access Methods
 
-# Quick smoke tests
-./scripts/test.sh --quick
+| Method | URL/Command | Notes |
+|--------|-------------|-------|
+| Proxmox Web UI | https://100.84.93.46:8006 | Via Tailscale |
+| SSH via Tailscale | `ssh root@100.84.93.46` | Recommended |
+| SSH via Public IP | `ssh root@<VPS_PUBLIC_IP>` | Requires provider firewall allow |
 
-# From Tailscale network (enables remote tests)
-./scripts/test.sh --from-tailnet
-```
+## Network Configuration
 
-### Validation and Status
+| Interface | IP Address | Purpose |
+|-----------|------------|---------|
+| vmbr0 | <VPS_PUBLIC_IP>/24 | Public bridge (WAN) |
+| vmbr1 | 10.0.0.1/24 | Private bridge (LAN for VMs) |
+| tailscale0 | 100.84.93.46 | Tailscale VPN |
 
-```bash
-./scripts/deploy.sh validate   # Validate Terraform + Ansible configs
-./scripts/deploy.sh status     # Show deployment status
-./scripts/deploy.sh destroy    # Tear down infrastructure
-./scripts/backup.sh            # Create config backups
-```
+### VM Network Configuration
 
-### Ansible Playbooks
+VMs should be created on vmbr1:
+- **IP Range**: 10.0.0.2 - 10.0.0.254
+- **Gateway**: 10.0.0.1
+- **DNS**: 10.0.0.1 or external (1.1.1.1)
+- **Static IPs**: 10.0.0.2 - 10.0.0.49
+- **DHCP Pool**: 10.0.0.100 - 10.0.0.199 (future)
 
-```bash
-cd ansible
-ansible-playbook playbooks/bootstrap.yml -i inventory/hosts.yml
-ansible-playbook playbooks/opnsense.yml -i inventory/hosts.yml
-ansible-playbook playbooks/tailscale.yml -i inventory/hosts.yml
-ansible-playbook playbooks/proxmox.yml -i inventory/hosts.yml
-ansible-playbook playbooks/site.yml -i inventory/hosts.yml      # Full deployment
-ansible-playbook playbooks/harden.yml -i inventory/hosts.yml --tags disable-direct-ssh
-ansible-playbook playbooks/rotate-credentials.yml -i inventory/hosts.yml
-```
+## Resource Budget
 
-### Terraform Operations
-
-```bash
-cd terraform
-terraform init
-terraform validate
-terraform plan -out=tfplan
-terraform apply tfplan
-terraform output
-terraform destroy
-```
-
-## Architecture
-
-### Directory Structure
-
-```
-terraform/
-├── main.tf              # Root module: orchestrates vmnet, opnsense, proxmox modules
-├── variables.tf         # Input variables (IPs, resources, credentials)
-├── outputs.tf           # Infrastructure outputs
-├── versions.tf          # Provider versions (libvirt >= 0.7.0)
-└── modules/
-    ├── libvirt-network/ # Private network (10.0.0.0/24) via virbr1 bridge
-    ├── opnsense-vm/     # Firewall VM with macvtap WAN + virbr1 LAN
-    └── proxmox-vm/      # Virtualization VM with root + data disks
-
-ansible/
-├── inventory/
-│   ├── hosts.yml        # Groups: hypervisors, firewalls, proxmox
-│   └── group_vars/
-│       ├── all.yml      # Common variables
-│       └── vault.yml    # Encrypted secrets (Tailscale key, passwords)
-├── playbooks/
-│   ├── site.yml         # Master orchestration (bootstrap→opnsense→tailscale→proxmox)
-│   ├── bootstrap.yml    # VPS: common + libvirt roles
-│   ├── opnsense.yml     # Firewall configuration
-│   ├── tailscale.yml    # VPN setup
-│   ├── proxmox.yml      # Virtualization platform
-│   ├── harden.yml       # Security hardening (disable direct SSH)
-│   └── rotate-credentials.yml
-├── roles/
-│   ├── common/          # SSH hardening, users, base packages
-│   ├── libvirt/         # KVM/QEMU installation, storage pools, networks
-│   ├── opnsense/        # Firewall rules, interfaces, Tailscale integration
-│   ├── proxmox/         # PVE installation, storage, networking
-│   └── tailscale/       # Auth, subnet routing, exit node config
-└── tests/
-    ├── connectivity.yml # Tailscale and network tests
-    └── security.yml     # Firewall rule validation
-
-scripts/
-├── deploy.sh            # Main orchestration script
-├── destroy.sh           # Teardown with confirmation
-├── test.sh              # Test runner
-└── backup.sh            # Config export
-```
-
-### Deployment Phases
-
-1. **Bootstrap** (Phase 2): Install KVM/libvirt on VPS, create storage pool and private network
-2. **OPNsense** (Phase 3): Deploy firewall VM capturing public IP, configure rules
-3. **Tailscale** (Phase 4): Install Tailscale on OPNsense, advertise 10.0.0.0/24 subnet
-4. **Proxmox** (Phase 5): Deploy virtualization VM on private network
-5. **Polish** (Phase 6): Hardening, credential rotation, documentation
-
-### Network Topology
-
-- **WAN**: Public IPv4 → OPNsense macvtap interface (exclusive ownership)
-- **LAN**: 10.0.0.0/24 via virbr1 bridge
-  - OPNsense LAN: 10.0.0.1 (gateway)
-  - Proxmox: 10.0.0.10
-- **VPN**: Tailscale subnet router advertises 10.0.0.0/24 to home tailnet
-
-## Spec-Kit Integration
-
-This project uses spec-kit for specification-driven development. Specs are in `specs/1-core-infrastructure/`:
-
-- `spec.md` - User stories and requirements
-- `plan.md` - Implementation plan with constitution compliance check
-- `tasks.md` - Phased task breakdown
-- `quickstart.md` - Step-by-step deployment guide
-- `contracts/` - Network topology and firewall rule contracts
-
-Use `/speckit.*` slash commands for spec management:
-- `/speckit.specify` - Create/update feature specification
-- `/speckit.plan` - Generate implementation plan
-- `/speckit.tasks` - Generate task breakdown
-- `/speckit.implement` - Execute tasks
+| Resource | Total | Used | Available |
+|----------|-------|------|-----------|
+| vCPU | 12 | ~2 (host overhead) | ~10 |
+| RAM | 64GB | ~4GB (host) | ~60GB |
+| Storage | 1200GB | ~50GB (OS) | ~1150GB |
 
 ## Security Notes
 
-- **Ansible Vault**: All secrets in `ansible/inventory/group_vars/vault.yml` must be encrypted
-- **No Direct Access**: Proxmox is only accessible via Tailscale (no public ports)
-- **Default Deny**: OPNsense firewall blocks all inbound WAN traffic except explicit allows
-- **Credential Rotation**: Tailscale auth key (90 days), vault password (180 days), SSH keys (365 days)
-- **Post-VPN Hardening**: Run `ansible-playbook playbooks/harden.yml --tags disable-direct-ssh` after Tailscale is verified working
+- SSH password authentication is disabled
+- Provider firewall blocks all except SSH from admin IP
+- Proxmox UI only accessible via Tailscale (no public exposure)
+- VMs isolated on private network with NAT egress
+- Tailscale provides encrypted overlay for all management traffic
 
-## Testing Strategy
+## Maintenance Commands
 
-Tests are Ansible playbooks in `ansible/tests/`:
+```bash
+# SSH to VPS
+ssh root@100.84.93.46
 
-- **security.yml**: Validates firewall rules, port scan, default-deny enforcement
-- **connectivity.yml**: Tailscale status, subnet route verification, cross-network ping
+# Check Proxmox version
+pveversion
 
-Run with `--from-tailnet` flag when testing from home network to enable remote connectivity tests.
+# Check Tailscale status
+tailscale status
 
-## Resource Allocation
-
-| Component | vCPU | RAM | Storage |
-|-----------|------|-----|---------|
-| OPNsense | 2 | 4GB | 32GB |
-| Proxmox | 8 | 48GB | 100GB root + 700GB data |
-| **Total** | 10 | 52GB | 832GB |
-
-VPS budget: 12 vCPU, 64GB RAM, 1200GB NVMe
+# Update system
+apt-get update && apt-get dist-upgrade
+```

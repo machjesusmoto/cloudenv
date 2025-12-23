@@ -1,4 +1,5 @@
 # Libvirt Network Module - Outputs
+# Compatible with libvirt provider v0.7.x
 
 output "network_id" {
   description = "ID of the created network"

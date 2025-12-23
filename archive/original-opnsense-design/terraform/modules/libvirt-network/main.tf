@@ -1,26 +1,34 @@
 # Libvirt Network Module
 # Constitution III: Infrastructure as Code
 # Creates isolated network for VM communication
+#
+# Compatible with libvirt provider v0.7.x
 
 terraform {
   required_providers {
     libvirt = {
       source  = "dmacvicar/libvirt"
-      version = ">= 0.7.0"
+      version = "~> 0.7.0"
     }
   }
 }
 
-# Private network for VMs (no DHCP - static IPs managed by OPNsense)
+# Private network for VMs
 resource "libvirt_network" "vmnet" {
   name      = var.network_name
-  mode      = var.network_mode
-  domain    = var.network_domain
   autostart = var.autostart
 
-  addresses = [var.network_cidr]
+  # Network forwarding mode
+  mode = var.network_mode
 
+  # Bridge configuration
   bridge = var.bridge_name
+
+  # Domain configuration
+  domain = var.network_domain
+
+  # IP configuration with DHCP disabled
+  addresses = [var.network_cidr]
 
   # DNS configuration
   dns {
@@ -28,30 +36,44 @@ resource "libvirt_network" "vmnet" {
     local_only = var.dns_local_only
   }
 
-  # No DHCP - OPNsense will handle DHCP if needed
-  # Static IPs are preferred for infrastructure VMs
+  # DHCP disabled - static IPs only
+  dhcp {
+    enabled = false
+  }
 
   lifecycle {
     prevent_destroy = false
   }
 }
 
-# Optional: Create additional isolated network for management
+# Optional management network
 resource "libvirt_network" "management" {
   count = var.create_management_network ? 1 : 0
 
   name      = "${var.network_name}-mgmt"
-  mode      = "isolated"
-  domain    = "mgmt.${var.network_domain}"
   autostart = var.autostart
 
+  # Isolated mode - no external connectivity
+  mode = "isolated"
+
+  # Bridge configuration
+  bridge = "${var.bridge_name}m"
+
+  # Domain configuration
+  domain = "mgmt.${var.network_domain}"
+
+  # IP configuration
   addresses = [var.management_network_cidr]
 
-  bridge = "${var.bridge_name}-mgmt"
-
+  # DNS disabled for management network
   dns {
     enabled    = false
     local_only = true
+  }
+
+  # DHCP disabled
+  dhcp {
+    enabled = false
   }
 
   lifecycle {

@@ -26,8 +26,8 @@ output "wan_interface" {
 }
 
 output "console_access" {
-  description = "VNC console access instructions"
-  value       = "Use 'virsh console ${var.vm_name}' or connect via VNC to localhost:${libvirt_domain.opnsense.graphics[0].port}"
+  description = "Console access instructions"
+  value       = "Use 'virsh console ${var.vm_name}' for serial console or 'virsh vncdisplay ${var.vm_name}' for VNC port"
 }
 
 output "volume_id" {

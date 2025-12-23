@@ -23,6 +23,73 @@ log_success() { echo -e "${GREEN}[SUCCESS]${NC} $*"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 
+#------------------------------------------------------------------------------
+# 1Password Integration
+#------------------------------------------------------------------------------
+
+# 1Password secret references (update these to match your vault)
+OP_SSH_PUBLIC_KEY="op://mjrzy5nchmredls7qi2ju542ly/6i5twt6etqycnpody3zsgrp42u/public key"
+OP_TAILSCALE_AUTH_KEY="op://mjrzy5nchmredls7qi2ju542ly/tps5mygbppf4zhh5yg72lmoima/credential"
+
+# Track if secrets have been loaded
+SECRETS_LOADED=false
+
+# Load secrets from 1Password and export as TF_VAR_* environment variables
+load_1password_secrets() {
+    if [[ "$SECRETS_LOADED" == "true" ]]; then
+        return 0
+    fi
+
+    if ! command -v op &> /dev/null; then
+        log_warn "1Password CLI (op) not found - secrets must be set manually"
+        log_warn "Set TF_VAR_ssh_public_key and TF_VAR_tailscale_auth_key environment variables"
+        return 0
+    fi
+
+    # Check if signed in to 1Password
+    if ! op account list &> /dev/null; then
+        log_info "Please sign in to 1Password..."
+        if ! eval "$(op signin)"; then
+            log_error "Failed to sign in to 1Password"
+            return 1
+        fi
+    fi
+
+    log_info "Loading secrets from 1Password..."
+
+    # Fetch SSH public key
+    if [[ -z "${TF_VAR_ssh_public_key:-}" ]]; then
+        log_info "Fetching SSH public key from 1Password..."
+        if TF_VAR_ssh_public_key=$(op read "$OP_SSH_PUBLIC_KEY" 2>/dev/null); then
+            export TF_VAR_ssh_public_key
+            log_success "SSH public key loaded"
+        else
+            log_warn "Failed to fetch SSH public key from 1Password"
+            log_warn "Falling back to ssh_public_key_path or manual configuration"
+        fi
+    else
+        log_info "Using existing TF_VAR_ssh_public_key from environment"
+    fi
+
+    # Fetch Tailscale auth key
+    if [[ -z "${TF_VAR_tailscale_auth_key:-}" ]]; then
+        log_info "Fetching Tailscale auth key from 1Password..."
+        if TF_VAR_tailscale_auth_key=$(op read "$OP_TAILSCALE_AUTH_KEY" 2>/dev/null); then
+            export TF_VAR_tailscale_auth_key
+            log_success "Tailscale auth key loaded"
+        else
+            log_error "Failed to fetch Tailscale auth key from 1Password"
+            log_error "This is required for Tailscale deployment"
+            return 1
+        fi
+    else
+        log_info "Using existing TF_VAR_tailscale_auth_key from environment"
+    fi
+
+    SECRETS_LOADED=true
+    log_success "1Password secrets loaded successfully"
+}
+
 # Help message
 usage() {
     cat << EOF
@@ -58,6 +125,12 @@ Examples:
     $(basename "$0") status             # Show current status
     $(basename "$0") test               # Run security/connectivity tests
 
+1Password Integration:
+    Secrets (SSH key, Tailscale auth key) are automatically fetched from 1Password
+    if the 'op' CLI is installed and configured. Otherwise, set manually:
+        export TF_VAR_ssh_public_key="ssh-ed25519 AAAA..."
+        export TF_VAR_tailscale_auth_key="tskey-auth-xxxxx"
+
 EOF
 }
 
@@ -74,6 +147,14 @@ preflight_checks() {
             ((errors++))
         fi
     done
+
+    # Check optional 1Password CLI
+    if ! command -v op &> /dev/null; then
+        log_warn "1Password CLI (op) not found - secrets must be provided manually"
+        log_warn "Install: https://developer.1password.com/docs/cli/get-started/"
+    else
+        log_info "1Password CLI detected - secrets will be fetched automatically"
+    fi
 
     # Check Ansible inventory
     if [[ ! -f "$PROJECT_ROOT/ansible/inventory/hosts.yml" ]]; then
@@ -144,6 +225,12 @@ run_terraform() {
     shift || true
     local extra_args=("$@")
 
+    # Load secrets from 1Password before Terraform operations
+    load_1password_secrets || {
+        log_error "Failed to load secrets - cannot proceed with Terraform"
+        return 1
+    }
+
     log_info "Running Terraform $command..."
 
     cd "$PROJECT_ROOT/terraform"
@@ -198,6 +285,12 @@ run_tailscale() {
 
     log_info "Deploying Tailscale VPN..."
 
+    # Load secrets from 1Password for Tailscale auth key
+    load_1password_secrets || {
+        log_error "Failed to load secrets - cannot proceed with Tailscale deployment"
+        return 1
+    }
+
     cd "$PROJECT_ROOT/ansible"
 
     if [[ ! -f playbooks/tailscale.yml ]]; then
@@ -205,8 +298,15 @@ run_tailscale() {
         return 1
     fi
 
+    # Pass Tailscale auth key to Ansible if available from 1Password
+    local ansible_extra_vars=()
+    if [[ -n "${TF_VAR_tailscale_auth_key:-}" ]]; then
+        ansible_extra_vars+=(-e "tailscale_auth_key=${TF_VAR_tailscale_auth_key}")
+    fi
+
     ansible-playbook playbooks/tailscale.yml \
         -i inventory/hosts.yml \
+        "${ansible_extra_vars[@]:-}" \
         "${extra_args[@]:-}"
 
     log_success "Tailscale deployment completed"

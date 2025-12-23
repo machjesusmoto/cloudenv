@@ -6,7 +6,7 @@ terraform {
   required_providers {
     libvirt = {
       source  = "dmacvicar/libvirt"
-      version = ">= 0.7.0"
+      version = "~> 0.7.0"  # Pin to 0.7.x - v0.8+ has breaking schema changes
     }
   }
 }
@@ -92,9 +92,10 @@ resource "libvirt_domain" "proxmox" {
 
   # Private network interface only (Constitution I: Security-First)
   # Proxmox is only accessible via Tailscale VPN through OPNsense
+  # Note: wait_for_lease = false because we use static IP via cloud-init
   network_interface {
     network_name   = var.private_network_name
-    wait_for_lease = true
+    wait_for_lease = false
   }
 
   # Console for debugging

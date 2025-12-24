@@ -1,0 +1,35 @@
+# Playwright MCP screenshots and artifacts
+.playwright-mcp/
+
+# Secrets and credentials (should never exist, but just in case)
+*.pem
+*.key
+secrets.yaml
+.env
+.env.*
+
+# Terraform state and sensitive files
+*.tfstate
+*.tfstate.*
+.terraform/
+terraform.tfvars
+
+# Ansible sensitive files
+*.vault
+vault_pass.txt
+
+# Editor and IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Talos machine configs with secrets (generated during bootstrap)
+controlplane.yaml
+worker.yaml
+talosconfig

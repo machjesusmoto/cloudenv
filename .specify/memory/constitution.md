@@ -1,50 +1,86 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# cloudenv Constitution
+
+Core principles governing all infrastructure decisions in this cloud environment project.
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Infrastructure as Code (NON-NEGOTIABLE)
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+All infrastructure MUST be defined declaratively and version-controlled. Manual configuration is prohibited except for initial bootstrap operations.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+- Every resource has a corresponding Git-tracked definition
+- Changes flow through PR → Review → Merge → Apply
+- Drift detection and remediation are automated
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### II. Public Repository Security
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+This repository is public as a living DevOps portfolio. All commits must be audit-ready.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+- **No secrets**: API keys, passwords, tokens never committed
+- **No identifying IPs**: Use placeholders (`<VPS_PUBLIC_IP>`, `<TAILSCALE_IP>`)
+- **No credentials**: SSH keys, certificates handled externally
+- Security review required before any commit touching sensitive paths
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### III. Immutable Infrastructure
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+Prefer immutable, API-driven systems over mutable, SSH-administered ones.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+- Talos Linux for Kubernetes (no SSH, API-only)
+- GitOps via ArgoCD for all workloads
+- Configuration changes via declarative updates, not in-place modification
+- Rollback capability for every change
+
+### IV. Defense in Depth
+
+Security implemented at multiple layers; no single point of failure.
+
+- Network segmentation (virbr1 private network)
+- Tailscale for secure remote access
+- Pod Security Standards enforced
+- Secrets encrypted at rest
+
+### V. Observable Systems
+
+All systems must expose health, metrics, and logs for operational visibility.
+
+- Prometheus/metrics endpoints on all services
+- Structured logging in JSON format
+- Health checks and readiness probes required
+- Alerting for resource exhaustion and failures
+
+### VI. Resource Efficiency
+
+Optimize for the constrained environment (single VPS host).
+
+- Right-size VM allocations
+- Memory ballooning enabled
+- Avoid over-provisioning
+- Monitor and reclaim unused resources
+
+## Technical Standards
+
+### Kubernetes
+- Talos Linux for immutable, secure nodes
+- Cilium CNI for networking and security policies
+- ArgoCD for GitOps workload management
+- democratic-csi for TrueNAS storage integration
+
+### Networking
+- Private network: 10.9.8.0/24
+- Pod CIDR: 10.244.0.0/16
+- Service CIDR: 10.96.0.0/12
+- Remote access: Tailscale only
+
+### Storage
+- TrueNAS Scale for shared storage
+- NFS for ReadWriteMany workloads
+- ZFS for data integrity
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+- Constitution supersedes ad-hoc decisions
+- Amendments require documentation update + PR approval
+- All changes must reference relevant principles
+- Complexity must be justified against these principles
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2025-12-24 | **Last Amended**: 2025-12-24

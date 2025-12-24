@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-CloudEnv is a multi-feature infrastructure project for deploying secure cloud services on SSDNodes VPS. The project is organized by feature, with each feature having its own specification and implementation.
+CloudEnv is a multi-feature infrastructure project for deploying secure cloud services on SSDNodes VPS. The project uses **spec-kit** workflow for specification-driven development with Claude Code integration.
 
 ## Project Philosophy: Public Portfolio
 
@@ -36,7 +36,93 @@ git diff --cached | grep -iE "password|secret|token|api.?key|tskey-api"
 git diff --cached | grep -E "\b[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\b" | grep -v "10\.\|192\.168\.\|100\.\|127\."
 ```
 
-### Current Architecture (Feature 1: Core Infrastructure)
+## Spec-Kit Workflow
+
+This project follows a structured specification → planning → implementation workflow.
+
+### Core Workflow Commands
+
+```bash
+# 1. Create a new feature specification
+/speckit.specify "description of the feature"
+
+# 2. Create technical implementation plan
+/speckit.plan
+
+# 3. Generate actionable task list
+/speckit.tasks
+
+# 4. Analyze consistency across artifacts (read-only)
+/speckit.analyze
+
+# 5. Execute implementation
+/speckit.implement
+```
+
+### Supporting Commands
+
+```bash
+/speckit.clarify       # Identify underspecified areas and ask clarification questions
+/speckit.checklist     # Generate custom checklist for the current feature
+/speckit.constitution  # Create/update project constitution
+/speckit.taskstoissues # Convert tasks to GitHub issues
+```
+
+### Feature Branch Convention
+
+Features use numbered branches: `###-feature-name` (e.g., `001-k8s-talos-cluster`)
+
+The system auto-detects the highest number from:
+- Remote branches
+- Local branches
+- Specs directories (`specs/###-*`)
+
+## Directory Structure
+
+```
+cloudenv/
+├── .claude/commands/           # Spec-kit slash commands
+├── .specify/
+│   ├── memory/                 # Constitution and project memory
+│   ├── scripts/bash/           # Workflow automation scripts
+│   └── templates/              # spec.md, plan.md, tasks.md templates
+├── specs/                      # Feature specifications (per feature branch)
+│   └── ###-feature-name/
+│       ├── spec.md             # Feature specification (WHAT, not HOW)
+│       ├── plan.md             # Technical implementation plan
+│       ├── tasks.md            # Actionable task list
+│       ├── research.md         # Technical decisions (optional)
+│       ├── data-model.md       # Entity definitions (optional)
+│       ├── quickstart.md       # Test scenarios (optional)
+│       ├── contracts/          # API specifications (optional)
+│       └── checklists/         # Quality validation checklists
+├── features/                   # Legacy feature directory (archived)
+│   ├── 1-core-infrastructure/  # ✅ Complete - Proxmox + Tailscale
+│   └── 2-tailscale-acl-configuration/ # ✅ Complete
+├── shared/                     # Shared resources across features
+├── archive/                    # Archived designs
+│   └── original-opnsense-design/
+├── docs/                       # Project documentation
+└── CLAUDE.md                   # This file
+```
+
+## Key Scripts
+
+```bash
+# Create new feature branch and initialize spec
+.specify/scripts/bash/create-new-feature.sh --json "feature description" --short-name "branch-suffix"
+
+# Setup implementation plan
+.specify/scripts/bash/setup-plan.sh --json
+
+# Check prerequisites for implementation
+.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks
+
+# Update agent context after planning
+.specify/scripts/bash/update-agent-context.sh claude
+```
+
+## Current Architecture
 
 ```
 Internet ──► SSDNodes Provider Firewall ──► Proxmox VE Host (<VPS_PUBLIC_IP>)
@@ -55,79 +141,16 @@ Home Network ──► Tailscale ──► pve-vps (100.84.93.46) ──► 10.0
 - **Tailscale 1.92.3**: Subnet router on host, advertising 10.0.0.0/24
 - **SSDNodes Provider Firewall**: Edge protection (default deny, SSH from admin IP only)
 
-## Directory Structure
-
-```
-cloudenv/
-├── features/                          # Feature-based organization
-│   ├── 1-core-infrastructure/         # ✅ Complete - Proxmox + Tailscale
-│   │   ├── spec.md                    # Requirements and user stories
-│   │   ├── plan.md                    # Implementation plan
-│   │   ├── tasks.md                   # Task breakdown and status
-│   │   ├── quickstart.md              # Deployment guide
-│   │   └── contracts/                 # Network topology, firewall rules
-│   └── 2-xxx/                         # Future features
-│
-├── shared/                            # Shared infrastructure code
-│   ├── terraform/                     # Reusable Terraform modules
-│   └── ansible/                       # Reusable Ansible roles
-│
-├── archive/                           # Archived/unused designs
-│   └── original-opnsense-design/      # Initial OPNsense-based design (unused)
-│
-├── scripts/                           # Project-wide scripts
-├── docs/                              # Project documentation
-└── CLAUDE.md                          # This file
-```
-
 ## Constitution Principles
 
-This project follows a formal constitution (`.specify/memory/constitution.md`) with five core principles:
+This project follows a formal constitution (`.specify/memory/constitution.md`) with six core principles:
 
-1. **Security-First Design**: Network isolation, encrypted transit, least privilege
-2. **Reliability Through Simplicity**: Minimal components, documented state, graceful failure
-3. **Infrastructure as Code**: All config declarative, version controlled, reproducible
-4. **Test Coverage Discipline**: Validation before apply, contract tests, integration tests
-5. **Extensibility by Design**: Modular structure, standard interfaces, parameterized configuration
-
-## Feature Development Workflow
-
-### Creating a New Feature
-
-1. Create feature directory:
-   ```bash
-   mkdir -p features/N-feature-name
-   ```
-
-2. Use spec-kit commands to initialize:
-   ```
-   /speckit.specify    # Create feature specification
-   /speckit.plan       # Generate implementation plan
-   /speckit.tasks      # Generate task breakdown
-   /speckit.implement  # Execute tasks
-   ```
-
-3. Each feature should contain:
-   - `spec.md` - User stories and requirements
-   - `plan.md` - Implementation plan with constitution compliance
-   - `tasks.md` - Phased task breakdown
-   - `quickstart.md` - Deployment/usage guide
-   - `contracts/` - Interface contracts (optional)
-
-### Feature Naming Convention
-
-Features are numbered sequentially: `N-descriptive-name`
-- `1-core-infrastructure` - Base VPS setup
-- `2-kubernetes-cluster` - K8s deployment (example)
-- `3-monitoring-stack` - Observability (example)
-
-## Access Methods
-
-| Method | URL/Command | Notes |
-|--------|-------------|-------|
-| Proxmox Web UI | https://100.84.93.46:8006 | Via Tailscale |
-| SSH via Tailscale | `ssh root@100.84.93.46` | Recommended |
-| SSH via Public IP | `ssh root@<VPS_PUBLIC_IP>` | Requires provider firewall allow |
+1. **Infrastructure as Code**: All config declarative, version controlled, reproducible
+2. **Public Repository Security**: No secrets, no identifying IPs, audit-ready commits
+3. **Immutable Infrastructure**: API-driven systems (Talos), GitOps, declarative updates
+4. **Defense in Depth**: Network segmentation, Tailscale access, Pod Security Standards
+5. **Observable Systems**: Prometheus endpoints, structured logging, health checks
+6. **Resource Efficiency**: Right-sized allocations, memory ballooning, reclaim unused
 
 ## Network Configuration
 
@@ -153,6 +176,14 @@ VMs should be created on vmbr1:
 | vCPU | 12 | ~2 (host overhead) | ~10 |
 | RAM | 64GB | ~4GB (host) | ~60GB |
 | Storage | 1200GB | ~50GB (OS) | ~1150GB |
+
+## Access Methods
+
+| Method | URL/Command | Notes |
+|--------|-------------|-------|
+| Proxmox Web UI | https://100.84.93.46:8006 | Via Tailscale |
+| SSH via Tailscale | `ssh root@100.84.93.46` | Recommended |
+| SSH via Public IP | `ssh root@<VPS_PUBLIC_IP>` | Requires provider firewall allow |
 
 ## Security Notes
 

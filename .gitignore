@@ -71,4 +71,11 @@ pve-*.tar
 # ISO images (too large for git)
 *.iso
 *.img
+
+# Playwright MCP screenshots and artifacts
 .playwright-mcp/
+
+# Talos machine configs with secrets (generated during bootstrap)
+controlplane.yaml
+worker.yaml
+talosconfig

@@ -6,6 +6,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 CloudEnv is a multi-feature infrastructure project for deploying secure cloud services on SSDNodes VPS. The project is organized by feature, with each feature having its own specification and implementation.
 
+## Project Philosophy: Public Portfolio
+
+**This repository is a living DevOps portfolio** - treated as a production environment and maintained in public view.
+
+### Implications
+
+1. **Security-First**: All commits audited for secrets, credentials, and sensitive data before pushing
+2. **No Hardcoded IPs**: Public IPs use placeholders (`<VPS_PUBLIC_IP>`, `<VPS_GATEWAY>`)
+3. **Production Standards**: Code quality, documentation, and practices reflect production-grade work
+4. **Transparency**: Demonstrates real-world infrastructure skills and decision-making
+
+### Sensitive Data Handling
+
+| Data Type | Policy |
+|-----------|--------|
+| Public VPS IPs | Use `<VPS_PUBLIC_IP>` placeholder |
+| API Keys/Secrets | Never commit; use 1Password refs (`op://...`) or env vars |
+| Tailscale IPs (100.x.x.x) | Acceptable (ephemeral, non-routable externally) |
+| Home LAN subnets (RFC1918) | Acceptable (non-routable) |
+
+### Pre-Push Security Checklist
+
+```bash
+# Check for secrets
+git diff --cached | grep -iE "password|secret|token|api.?key|tskey-api"
+
+# Check for public IPs (adjust pattern for your IP range)
+git diff --cached | grep -E "\b[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\b" | grep -v "10\.\|192\.168\.\|100\.\|127\."
+```
+
 ### Current Architecture (Feature 1: Core Infrastructure)
 
 ```

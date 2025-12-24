@@ -1,0 +1,118 @@
+---
+# Proxmox Storage Configuration
+# T058: Storage pool configuration
+# Constitution II: Reliability Through Simplicity
+
+- name: Display storage configuration info
+  ansible.builtin.debug:
+    msg: |
+      === Proxmox Storage Configuration ===
+      Local Storage: {{ proxmox_storage_local_path }}
+      LVM Storage: {{ 'Enabled' if proxmox_storage_local_lvm_enabled else 'Disabled' }}
+      Data Disk: {{ proxmox_storage_data_disk }}
+      ======================================
+
+- name: Verify local storage directory exists
+  ansible.builtin.file:
+    path: "{{ proxmox_storage_local_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Create ISO storage directory
+  ansible.builtin.file:
+    path: "{{ proxmox_storage_local_path }}/template/iso"
+    state: directory
+    mode: '0755'
+
+- name: Create VM images directory
+  ansible.builtin.file:
+    path: "{{ proxmox_storage_local_path }}/images"
+    state: directory
+    mode: '0755'
+
+- name: Create container templates directory
+  ansible.builtin.file:
+    path: "{{ proxmox_storage_local_path }}/template/cache"
+    state: directory
+    mode: '0755'
+
+- name: Create backup directory
+  ansible.builtin.file:
+    path: "{{ proxmox_storage_local_path }}/dump"
+    state: directory
+    mode: '0755'
+
+# LVM Storage Configuration
+- name: Check if data disk exists
+  ansible.builtin.stat:
+    path: "{{ proxmox_storage_data_disk }}"
+  register: data_disk_stat
+  when: proxmox_storage_local_lvm_enabled
+
+- name: Check if data disk is already partitioned
+  ansible.builtin.command: lsblk -no FSTYPE {{ proxmox_storage_data_disk }}
+  register: data_disk_fstype
+  changed_when: false
+  failed_when: false
+  when:
+    - proxmox_storage_local_lvm_enabled
+    - data_disk_stat.stat.exists | default(false)
+
+- name: Create physical volume on data disk
+  ansible.builtin.command: pvcreate {{ proxmox_storage_data_disk }}
+  when:
+    - proxmox_storage_local_lvm_enabled
+    - data_disk_stat.stat.exists | default(false)
+    - data_disk_fstype.stdout == ""
+  register: pv_create
+  changed_when: pv_create.rc == 0
+
+- name: Create volume group for data
+  ansible.builtin.command: vgcreate pve-data {{ proxmox_storage_data_disk }}
+  when:
+    - proxmox_storage_local_lvm_enabled
+    - pv_create.changed | default(false)
+  register: vg_create
+  changed_when: vg_create.rc == 0
+
+- name: Create logical volume for VM data
+  ansible.builtin.command: lvcreate -l 100%FREE -n data pve-data
+  when:
+    - proxmox_storage_local_lvm_enabled
+    - vg_create.changed | default(false)
+  register: lv_create
+  changed_when: lv_create.rc == 0
+
+- name: Configure LVM thin pool for VMs
+  ansible.builtin.command: >
+    pvesm add lvmthin pve-data-lvm
+    --vgname pve-data
+    --thinpool data
+    --content images,rootdir
+  when:
+    - proxmox_storage_local_lvm_enabled
+    - lv_create.changed | default(false)
+  failed_when: false
+
+- name: Verify Proxmox storage configuration
+  ansible.builtin.command: pvesm status
+  register: storage_status
+  changed_when: false
+
+- name: Display storage status
+  ansible.builtin.debug:
+    var: storage_status.stdout_lines
+
+- name: Storage configuration summary
+  ansible.builtin.debug:
+    msg: |
+      === Storage Configuration Complete ===
+
+      Available Storage Pools:
+      {{ storage_status.stdout }}
+
+      Storage locations:
+        - ISOs: {{ proxmox_storage_local_path }}/template/iso
+        - VM Images: {{ proxmox_storage_local_path }}/images
+        - Backups: {{ proxmox_storage_local_path }}/dump
+      =======================================

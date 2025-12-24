@@ -1,0 +1,91 @@
+---
+# Libvirt Storage Pool Configuration
+# Constitution II: Reliability Through Simplicity - Standard directory pools
+
+- name: Create storage directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0711'
+  loop:
+    - "{{ libvirt_images_path | default('/var/lib/libvirt/images') }}"
+    - "{{ libvirt_iso_path | default('/var/lib/libvirt/iso') }}"
+
+- name: Define default storage pool
+  community.libvirt.virt_pool:
+    name: default
+    command: define
+    xml: |
+      <pool type='dir'>
+        <name>default</name>
+        <target>
+          <path>{{ libvirt_images_path | default('/var/lib/libvirt/images') }}</path>
+          <permissions>
+            <mode>0711</mode>
+            <owner>0</owner>
+            <group>0</group>
+          </permissions>
+        </target>
+      </pool>
+  register: default_pool_define
+
+- name: Build default storage pool
+  community.libvirt.virt_pool:
+    name: default
+    command: build
+  when: default_pool_define.changed
+
+- name: Start default storage pool
+  community.libvirt.virt_pool:
+    name: default
+    state: active
+
+- name: Autostart default storage pool
+  community.libvirt.virt_pool:
+    name: default
+    autostart: yes
+
+- name: Define ISO storage pool
+  community.libvirt.virt_pool:
+    name: iso
+    command: define
+    xml: |
+      <pool type='dir'>
+        <name>iso</name>
+        <target>
+          <path>{{ libvirt_iso_path | default('/var/lib/libvirt/iso') }}</path>
+          <permissions>
+            <mode>0711</mode>
+            <owner>0</owner>
+            <group>0</group>
+          </permissions>
+        </target>
+      </pool>
+  register: iso_pool_define
+
+- name: Build ISO storage pool
+  community.libvirt.virt_pool:
+    name: iso
+    command: build
+  when: iso_pool_define.changed
+
+- name: Start ISO storage pool
+  community.libvirt.virt_pool:
+    name: iso
+    state: active
+
+- name: Autostart ISO storage pool
+  community.libvirt.virt_pool:
+    name: iso
+    autostart: yes
+
+- name: Refresh storage pools
+  community.libvirt.virt_pool:
+    name: "{{ item }}"
+    command: refresh
+  loop:
+    - default
+    - iso
+  changed_when: false

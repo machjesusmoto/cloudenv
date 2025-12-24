@@ -1,0 +1,81 @@
+---
+# Tailscale VPN Deployment Playbook
+# Constitution I: Security-First - VPN-only access
+# Constitution III: Infrastructure as Code
+
+- name: Deploy Tailscale VPN
+  hosts: firewalls
+  gather_facts: no
+  become: no
+
+  vars:
+    deployment_phase: "tailscale"
+
+  pre_tasks:
+    - name: Display deployment information
+      ansible.builtin.debug:
+        msg: |
+          === Tailscale Deployment ===
+          Target: {{ inventory_hostname }}
+          Host: {{ ansible_host }}
+          Phase: {{ deployment_phase }}
+          ============================
+      delegate_to: localhost
+
+    - name: Verify OPNsense is reachable
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        timeout: 60
+      delegate_to: localhost
+
+    - name: Verify OPNsense firewall is operational
+      ansible.builtin.raw: |
+        pfctl -s info | grep "Status:"
+      register: fw_check
+      changed_when: false
+
+    - name: Assert firewall is enabled
+      ansible.builtin.assert:
+        that:
+          - "'Enabled' in fw_check.stdout"
+        fail_msg: "OPNsense firewall must be enabled before Tailscale deployment"
+
+  roles:
+    - role: tailscale
+      tags: [tailscale, vpn]
+
+  post_tasks:
+    - name: Configure Tailscale firewall rules
+      ansible.builtin.include_tasks: ../roles/opnsense/tasks/tailscale-firewall.yml
+      tags: [firewall, tailscale]
+
+    - name: Run connectivity validation tests
+      ansible.builtin.include_tasks: ../tests/connectivity.yml
+      tags: [test, connectivity]
+      when: run_connectivity_tests | default(false) | bool
+
+    - name: Deployment summary
+      ansible.builtin.debug:
+        msg: |
+          === Tailscale Deployment Complete ===
+          Firewall: {{ inventory_hostname }}
+
+          ⚠️  ACTION REQUIRED:
+          1. Log into Tailscale Admin Console
+             https://login.tailscale.com/admin/machines
+
+          2. Find device: {{ tailscale_hostname | default('opnsense-vps') }}
+
+          3. Approve subnet routes:
+             - 10.0.0.0/24 (private network)
+
+          4. Test connectivity from home:
+             ping 10.0.0.1
+
+          Next Steps:
+            1. Approve routes in Tailscale console
+            2. Test connectivity from tailnet device
+            3. Deploy Proxmox (Phase 5)
+          =====================================
+      delegate_to: localhost

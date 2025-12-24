@@ -1,0 +1,64 @@
+---
+# Common Role - Main Tasks
+# Applies to all hosts: system hardening, SSH, packages
+
+- name: Include OS-specific variables
+  ansible.builtin.include_vars: "{{ ansible_os_family | lower }}.yml"
+  failed_when: false
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Upgrade all packages
+  ansible.builtin.apt:
+    upgrade: dist
+    autoremove: yes
+  when: apt_upgrade | default(true) | bool
+  register: apt_upgrade_result
+
+- name: Install essential packages
+  ansible.builtin.apt:
+    name:
+      - vim
+      - curl
+      - wget
+      - htop
+      - iotop
+      - net-tools
+      - dnsutils
+      - jq
+      - unzip
+      - rsync
+      - ca-certificates
+      - gnupg
+      - lsb-release
+      - python3
+      - python3-pip
+    state: present
+
+- name: Set system timezone
+  community.general.timezone:
+    name: "{{ system_timezone | default('UTC') }}"
+
+- name: Configure system locale
+  ansible.builtin.locale_gen:
+    name: "{{ system_locale | default('en_US.UTF-8') }}"
+    state: present
+
+- name: Include SSH hardening tasks
+  ansible.builtin.include_tasks: ssh.yml
+
+- name: Include user management tasks
+  ansible.builtin.include_tasks: users.yml
+
+- name: Include firewall tasks
+  ansible.builtin.include_tasks: firewall.yml
+  when: configure_host_firewall | default(false) | bool
+
+- name: Reboot if required
+  ansible.builtin.reboot:
+    reboot_timeout: 300
+  when: apt_upgrade_result.changed and reboot_after_upgrade | default(false) | bool

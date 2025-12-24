@@ -1,0 +1,55 @@
+---
+# OPNsense Deployment Playbook
+# Constitution I: Security-First - Secure network perimeter
+# Constitution III: Infrastructure as Code
+
+- name: Deploy OPNsense Firewall
+  hosts: firewalls
+  gather_facts: no
+  become: no
+
+  vars:
+    deployment_phase: "opnsense"
+
+  pre_tasks:
+    - name: Display deployment information
+      ansible.builtin.debug:
+        msg: |
+          === OPNsense Deployment ===
+          Target: {{ inventory_hostname }}
+          Host: {{ ansible_host }}
+          Phase: {{ deployment_phase }}
+          ===========================
+      delegate_to: localhost
+
+    - name: Verify OPNsense is reachable
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        timeout: 60
+      delegate_to: localhost
+
+  roles:
+    - role: opnsense
+      tags: [opnsense, firewall]
+
+  post_tasks:
+    - name: Run security validation tests
+      ansible.builtin.include_tasks: ../tests/security.yml
+      tags: [test, security]
+      when: run_security_tests | default(true) | bool
+
+    - name: Deployment summary
+      ansible.builtin.debug:
+        msg: |
+          === OPNsense Deployment Complete ===
+          Firewall: {{ inventory_hostname }}
+          LAN IP: {{ opnsense_lan_ip | default('10.0.0.1') }}
+          WebUI: https://{{ opnsense_lan_ip | default('10.0.0.1') }}
+
+          Next Steps:
+            1. Verify WebUI accessible from LAN
+            2. Configure Tailscale (Phase 4)
+            3. Run security tests: ansible-playbook tests/security.yml
+          =====================================
+      delegate_to: localhost

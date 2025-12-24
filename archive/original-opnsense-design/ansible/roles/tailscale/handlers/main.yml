@@ -1,0 +1,13 @@
+---
+# Tailscale Role - Handlers
+
+- name: Restart tailscaled
+  ansible.builtin.raw: |
+    /usr/local/etc/rc.d/tailscaled restart 2>/dev/null || \
+    systemctl restart tailscaled 2>/dev/null || \
+    service tailscaled restart
+
+- name: Reload tailscale
+  ansible.builtin.raw: |
+    tailscale down && tailscale up || \
+    /usr/local/bin/tailscale down && /usr/local/bin/tailscale up

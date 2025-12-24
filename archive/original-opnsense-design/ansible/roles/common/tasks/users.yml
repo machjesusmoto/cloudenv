@@ -1,0 +1,57 @@
+---
+# User Management Tasks
+# Creates deploy user for Ansible operations
+
+- name: Create deploy user
+  ansible.builtin.user:
+    name: deploy
+    comment: "Deployment automation user"
+    shell: /bin/bash
+    groups:
+      - sudo
+    append: yes
+    create_home: yes
+    state: present
+  when: create_deploy_user | default(true) | bool
+
+- name: Configure deploy user SSH directory
+  ansible.builtin.file:
+    path: /home/deploy/.ssh
+    state: directory
+    owner: deploy
+    group: deploy
+    mode: '0700'
+  when: create_deploy_user | default(true) | bool
+
+- name: Deploy SSH keys for deploy user
+  ansible.posix.authorized_key:
+    user: deploy
+    key: "{{ lookup('file', ssh_public_key_path) }}"
+    state: present
+  when:
+    - create_deploy_user | default(true) | bool
+    - ssh_public_key_path is defined and ssh_public_key_path | length > 0
+  failed_when: false
+
+- name: Configure passwordless sudo for deploy user
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/deploy
+    line: 'deploy ALL=(ALL) NOPASSWD:ALL'
+    create: yes
+    mode: '0440'
+    validate: '/usr/sbin/visudo -cf %s'
+  when: create_deploy_user | default(true) | bool
+
+- name: Lock root password (optional)
+  ansible.builtin.user:
+    name: root
+    password_lock: yes
+  when: lock_root_password | default(false) | bool
+
+- name: Remove unnecessary users
+  ansible.builtin.user:
+    name: "{{ item }}"
+    state: absent
+    remove: yes
+  loop: "{{ users_to_remove | default([]) }}"
+  when: users_to_remove is defined

@@ -1,0 +1,72 @@
+---
+# Libvirt Network Configuration
+# Constitution I: Security-First - Isolated network for VMs
+
+- name: Destroy default NAT network if exists
+  community.libvirt.virt_net:
+    name: default
+    state: inactive
+  failed_when: false
+  changed_when: false
+
+- name: Undefine default NAT network
+  community.libvirt.virt_net:
+    name: default
+    command: undefine
+  failed_when: false
+  changed_when: false
+
+- name: Define private network for VMs
+  community.libvirt.virt_net:
+    name: "{{ libvirt_network_name | default('vmnet') }}"
+    command: define
+    xml: |
+      <network>
+        <name>{{ libvirt_network_name | default('vmnet') }}</name>
+        <forward mode='route'/>
+        <bridge name='{{ libvirt_bridge_name | default('virbr1') }}' stp='on' delay='0'/>
+        <ip address='{{ libvirt_network_gateway | default('10.0.0.254') }}' netmask='{{ libvirt_network_netmask | default('255.255.255.0') }}'>
+        </ip>
+      </network>
+  register: vmnet_define
+
+- name: Start private network
+  community.libvirt.virt_net:
+    name: "{{ libvirt_network_name | default('vmnet') }}"
+    state: active
+
+- name: Autostart private network
+  community.libvirt.virt_net:
+    name: "{{ libvirt_network_name | default('vmnet') }}"
+    autostart: yes
+
+- name: Enable IP forwarding
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    sysctl_set: yes
+    state: present
+    reload: yes
+
+- name: Configure iptables for VM network NAT
+  ansible.builtin.iptables:
+    table: nat
+    chain: POSTROUTING
+    source: "{{ libvirt_network_cidr | default('10.0.0.0/24') }}"
+    out_interface: "{{ ansible_default_ipv4.interface }}"
+    jump: MASQUERADE
+  notify: Save iptables rules
+
+- name: Allow forwarding from VM network
+  ansible.builtin.iptables:
+    chain: FORWARD
+    in_interface: "{{ libvirt_bridge_name | default('virbr1') }}"
+    jump: ACCEPT
+  notify: Save iptables rules
+
+- name: Allow forwarding to VM network
+  ansible.builtin.iptables:
+    chain: FORWARD
+    out_interface: "{{ libvirt_bridge_name | default('virbr1') }}"
+    jump: ACCEPT
+  notify: Save iptables rules

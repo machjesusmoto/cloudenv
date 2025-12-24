@@ -1,0 +1,74 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!terraform.tfvars.example
+.terraform.lock.hcl
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+*.tfplan
+
+# Ansible
+*.retry
+.vault_pass
+.vault_password
+vault_password_file
+inventory/group_vars/vault.yml
+!inventory/group_vars/vault.yml.example
+
+# Secrets and credentials
+*.pem
+*.key
+*.crt
+*.p12
+.env
+.env.*
+!.env.example
+secrets/
+credentials/
+
+# SSH keys
+id_rsa*
+id_ed25519*
+!*.pub
+
+# OS and IDE
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.iml
+
+# Logs
+*.log
+logs/
+
+# Python (for testing tools)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# OPNsense/Proxmox config backups (contain secrets)
+*.xml.bak
+config-*.xml
+pve-*.tar
+
+# ISO images (too large for git)
+*.iso
+*.img
+.playwright-mcp/

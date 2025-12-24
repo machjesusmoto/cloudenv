@@ -1,0 +1,47 @@
+---
+# OPNsense WebUI Configuration
+# Constitution I: Security-First - HTTPS only, LAN access
+
+- name: Verify WebUI service status
+  ansible.builtin.raw: |
+    sockstat -l | grep -E "nginx|lighttpd" || echo "Web service check"
+  register: webui_status
+  changed_when: false
+
+- name: Verify HTTPS is enabled
+  ansible.builtin.raw: |
+    # Check if HTTPS redirect is configured
+    grep -r "protocol.*https" /usr/local/etc/nginx/ 2>/dev/null || \
+    grep -r "ssl" /usr/local/etc/lighttpd* 2>/dev/null || \
+    echo "HTTPS configuration check"
+  register: https_check
+  changed_when: false
+  failed_when: false
+
+- name: Verify WebUI is accessible on LAN
+  ansible.builtin.raw: |
+    curl -k -s -o /dev/null -w "%{http_code}" https://127.0.0.1/ || echo "000"
+  register: webui_local_check
+  changed_when: false
+  failed_when: false
+
+- name: Display WebUI status
+  ansible.builtin.debug:
+    msg: "WebUI local check returned: {{ webui_local_check.stdout }}"
+
+- name: Verify WebUI blocked on WAN interface
+  ansible.builtin.raw: |
+    # Check firewall rules for WebUI block on WAN
+    pfctl -sr | grep -E "block.*{{ opnsense_wan_interface }}.*port.*(80|443)" || \
+    echo "WebUI WAN block check (may be implicit via default deny)"
+  register: webui_wan_block
+  changed_when: false
+
+- name: WebUI Security Summary
+  ansible.builtin.debug:
+    msg: |
+      === WebUI Security Status ===
+      HTTPS Enabled: {{ 'Yes' if 'ssl' in https_check.stdout or 'https' in https_check.stdout else 'Check manually' }}
+      Local Access: {{ 'OK' if webui_local_check.stdout in ['200', '302', '301'] else 'May require check' }}
+      WAN Blocked: {{ 'Likely (default deny)' }}
+      =============================

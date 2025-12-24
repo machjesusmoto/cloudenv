@@ -1,0 +1,109 @@
+---
+# Proxmox User Configuration
+# T059: Root password from vault
+# Constitution I: Security-First - Strong authentication
+
+- name: Display user configuration info
+  ansible.builtin.debug:
+    msg: |
+      === Proxmox User Configuration ===
+      Root Login: {{ proxmox_ssh_root_login }}
+      SSH Key Only: {{ proxmox_ssh_key_only }}
+      Admin User: {{ 'Enabled' if proxmox_create_admin_user else 'Disabled' }}
+      ===================================
+
+# Set root password if provided
+- name: Set root password
+  ansible.builtin.user:
+    name: root
+    password: "{{ proxmox_root_password | password_hash('sha512') }}"
+    update_password: always
+  when: proxmox_root_password | length > 0
+  no_log: true
+
+# SSH Configuration
+- name: Configure SSH - disable password auth (key-only)
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+    state: present
+  when: proxmox_ssh_key_only
+  notify: Restart sshd
+
+- name: Configure SSH - root login setting
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PermitRootLogin'
+    line: 'PermitRootLogin {{ proxmox_ssh_root_login }}'
+    state: present
+  notify: Restart sshd
+
+- name: Configure SSH - listen on specific port
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?Port'
+    line: 'Port {{ proxmox_ssh_port }}'
+    state: present
+  notify: Restart sshd
+
+# Create admin user if requested
+- name: Create admin user
+  ansible.builtin.user:
+    name: "{{ proxmox_admin_username }}"
+    password: "{{ proxmox_admin_password | password_hash('sha512') }}"
+    groups: sudo
+    shell: /bin/bash
+    create_home: yes
+  when:
+    - proxmox_create_admin_user
+    - proxmox_admin_password | length > 0
+  no_log: true
+
+- name: Create Proxmox admin user (PVE realm)
+  ansible.builtin.command: >
+    pveum user add {{ proxmox_admin_username }}@pam
+    --password {{ proxmox_admin_password }}
+    --comment "Admin user created by Ansible"
+  when:
+    - proxmox_create_admin_user
+    - proxmox_admin_password | length > 0
+  failed_when: false
+  no_log: true
+
+- name: Grant admin permissions in Proxmox
+  ansible.builtin.command: >
+    pveum acl modify /
+    --users {{ proxmox_admin_username }}@pam
+    --roles Administrator
+  when:
+    - proxmox_create_admin_user
+    - proxmox_admin_password | length > 0
+  failed_when: false
+
+- name: User configuration complete
+  ansible.builtin.debug:
+    msg: |
+      === User Configuration Complete ===
+
+      Root Account:
+        - Password: Set from vault
+        - SSH: {{ 'Key-only' if proxmox_ssh_key_only else 'Password allowed' }}
+        - Root Login: {{ proxmox_ssh_root_login }}
+
+      {% if proxmox_create_admin_user %}
+      Admin Account:
+        - Username: {{ proxmox_admin_username }}@pam
+        - Role: Administrator
+        - PVE Access: Full
+      {% endif %}
+
+      Web UI Login:
+        - Username: root@pam (or {{ proxmox_admin_username }}@pam if created)
+        - URL: https://{{ proxmox_ip }}:{{ proxmox_web_port }}
+
+      Security Notes:
+        - All access requires Tailscale VPN
+        - SSH key authentication recommended
+        - Consider disabling root login after admin user setup
+      ====================================

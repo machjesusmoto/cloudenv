@@ -1,0 +1,65 @@
+---
+# SSH Hardening Tasks
+# Per Constitution I: Security-First Design
+
+- name: Configure SSH daemon
+  ansible.builtin.template:
+    src: sshd_config.j2
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: '0600'
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: Restart SSH
+
+- name: Ensure SSH directory exists
+  ansible.builtin.file:
+    path: /root/.ssh
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Deploy authorized SSH keys
+  ansible.posix.authorized_key:
+    user: root
+    key: "{{ item }}"
+    state: present
+  loop: "{{ ssh_authorized_keys | default([]) }}"
+  when: ssh_authorized_keys is defined
+
+- name: Deploy SSH public key from file
+  ansible.posix.authorized_key:
+    user: root
+    key: "{{ lookup('file', ssh_public_key_path) }}"
+    state: present
+  when: ssh_public_key_path is defined and ssh_public_key_path | length > 0
+  failed_when: false
+
+- name: Disable SSH password authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+  notify: Restart SSH
+  when: ssh_password_authentication is defined and not ssh_password_authentication
+
+- name: Enable SSH key authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PubkeyAuthentication'
+    line: 'PubkeyAuthentication yes'
+  notify: Restart SSH
+
+- name: Configure SSH root login
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PermitRootLogin'
+    line: "PermitRootLogin {{ ssh_permit_root_login | default('prohibit-password') }}"
+  notify: Restart SSH
+
+- name: Ensure SSH service is enabled and started
+  ansible.builtin.systemd:
+    name: sshd
+    state: started
+    enabled: yes

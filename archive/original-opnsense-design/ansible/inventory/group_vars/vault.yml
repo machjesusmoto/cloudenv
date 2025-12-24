@@ -1,0 +1,67 @@
+# Ansible Vault Secrets Template
+# Core Infrastructure Setup
+#
+# INSTRUCTIONS:
+# 1. Copy this file to vault.yml
+# 2. Replace placeholder values with actual secrets
+# 3. Encrypt with: ansible-vault encrypt vault.yml
+# 4. Store vault password securely (not in repo)
+#
+# DO NOT commit the real vault.yml to Git!
+
+#------------------------------------------------------------------------------
+# SSH Keys
+#------------------------------------------------------------------------------
+
+# SSH private key for VPS access (PEM format)
+vault_ssh_private_key: |
+  -----BEGIN OPENSSH PRIVATE KEY-----
+  YOUR_PRIVATE_KEY_HERE
+  -----END OPENSSH PRIVATE KEY-----
+
+#------------------------------------------------------------------------------
+# OPNsense Credentials
+#------------------------------------------------------------------------------
+
+# Root password for OPNsense console/SSH
+vault_opnsense_root_password: "GENERATE_STRONG_PASSWORD"
+
+# OPNsense web UI admin password
+vault_opnsense_admin_password: "GENERATE_STRONG_PASSWORD"
+
+# OPNsense API key (generate in System > Access > Users)
+vault_opnsense_api_key: ""
+vault_opnsense_api_secret: ""
+
+#------------------------------------------------------------------------------
+# Proxmox Credentials
+#------------------------------------------------------------------------------
+
+# Root password for Proxmox
+vault_proxmox_root_password: "GENERATE_STRONG_PASSWORD"
+
+#------------------------------------------------------------------------------
+# Tailscale Configuration
+#------------------------------------------------------------------------------
+
+# Tailscale auth key (generate at https://login.tailscale.com/admin/settings/keys)
+# Use a reusable, ephemeral key for automation
+# Rotate every 90 days per FR-009
+vault_tailscale_auth_key: "tskey-auth-XXXXXXXXXXXX"
+
+#------------------------------------------------------------------------------
+# VPS Provider (if API automation needed)
+#------------------------------------------------------------------------------
+
+# SSDNodes API credentials (optional)
+vault_ssdnodes_api_key: ""
+
+#------------------------------------------------------------------------------
+# Backup Encryption (optional)
+#------------------------------------------------------------------------------
+
+# GPG key ID for encrypted backups
+vault_backup_gpg_key_id: ""
+
+# Backup encryption passphrase
+vault_backup_passphrase: ""

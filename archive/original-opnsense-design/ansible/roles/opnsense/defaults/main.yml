@@ -1,0 +1,46 @@
+---
+# OPNsense Role - Default Variables
+
+# Connection settings (via Tailscale or direct)
+opnsense_host: "10.0.0.1"
+opnsense_user: "root"
+opnsense_api_key: ""
+opnsense_api_secret: ""
+
+# Interface configuration
+opnsense_wan_interface: "vtnet0"
+opnsense_lan_interface: "vtnet1"
+opnsense_lan_ip: "10.0.0.1"
+opnsense_lan_netmask: "24"
+opnsense_lan_gateway: ""
+
+# DNS settings
+opnsense_dns_servers:
+  - "1.1.1.1"
+  - "8.8.8.8"
+opnsense_domain: "cloudenv.local"
+opnsense_hostname: "opnsense"
+
+# Firewall defaults (Constitution I: Security-First)
+opnsense_firewall_default_deny: true
+opnsense_firewall_log_default: true
+
+# WebUI settings
+opnsense_webui_https_only: true
+opnsense_webui_port: 443
+opnsense_disable_webui_wan: true
+
+# SSH settings
+opnsense_ssh_enabled: true
+opnsense_ssh_port: 22
+opnsense_ssh_permit_root: true
+opnsense_ssh_password_auth: false
+
+# Admin password (from vault)
+opnsense_root_password: ""
+
+# Timezone
+opnsense_timezone: "UTC"
+
+# Update settings
+opnsense_check_updates: false

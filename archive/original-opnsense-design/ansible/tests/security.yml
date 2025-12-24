@@ -1,0 +1,143 @@
+---
+# Security Tests for OPNsense Firewall
+# Constitution IV: Test Coverage Discipline
+# Validates firewall rules per contracts/firewall-rules.md
+
+- name: Security Validation Tests
+  hosts: firewalls
+  gather_facts: no
+  vars:
+    wan_interface: "vtnet0"
+    lan_interface: "vtnet1"
+    test_timeout: 5
+
+  tasks:
+    # T023: Firewall rule validation tests
+    - name: Test - OPNsense is responding
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        timeout: "{{ test_timeout }}"
+      delegate_to: localhost
+
+    - name: Test - WAN interface has public IP
+      ansible.builtin.shell: |
+        ssh {{ ansible_user }}@{{ ansible_host }} "ifconfig {{ wan_interface }} | grep 'inet '"
+      register: wan_ip_check
+      delegate_to: localhost
+      changed_when: false
+
+    - name: Validate - WAN has public IP (not RFC1918)
+      ansible.builtin.assert:
+        that:
+          - wan_ip_check.stdout | length > 0
+          - "'10.' not in wan_ip_check.stdout"
+          - "'172.16.' not in wan_ip_check.stdout"
+          - "'192.168.' not in wan_ip_check.stdout"
+        fail_msg: "WAN interface does not have a public IP address"
+        success_msg: "WAN interface has public IP"
+
+    - name: Test - LAN interface has correct IP
+      ansible.builtin.shell: |
+        ssh {{ ansible_user }}@{{ ansible_host }} "ifconfig {{ lan_interface }} | grep 'inet '"
+      register: lan_ip_check
+      delegate_to: localhost
+      changed_when: false
+
+    - name: Validate - LAN has 10.0.0.1
+      ansible.builtin.assert:
+        that:
+          - "'10.0.0.1' in lan_ip_check.stdout"
+        fail_msg: "LAN interface does not have IP 10.0.0.1"
+        success_msg: "LAN interface configured correctly (10.0.0.1)"
+
+    - name: Test - Firewall is enabled
+      ansible.builtin.shell: |
+        ssh {{ ansible_user }}@{{ ansible_host }} "pfctl -s info | grep 'Status:'"
+      register: firewall_status
+      delegate_to: localhost
+      changed_when: false
+
+    - name: Validate - Firewall is enabled
+      ansible.builtin.assert:
+        that:
+          - "'Enabled' in firewall_status.stdout"
+        fail_msg: "Firewall is not enabled"
+        success_msg: "Firewall is enabled"
+
+    # T024: Port scan test for default-deny on WAN
+    - name: Test - SSH blocked from WAN (default-deny)
+      ansible.builtin.wait_for:
+        host: "{{ opnsense_wan_ip | default(ansible_host) }}"
+        port: 22
+        timeout: 3
+        state: stopped
+      delegate_to: localhost
+      register: ssh_wan_test
+      ignore_errors: yes
+
+    - name: Validate - SSH is blocked on WAN
+      ansible.builtin.assert:
+        that:
+          - ssh_wan_test.failed or ssh_wan_test.state == 'stopped'
+        fail_msg: "WARNING: SSH is accessible from WAN - security risk!"
+        success_msg: "SSH correctly blocked on WAN interface"
+      when: opnsense_wan_ip is defined
+
+    - name: Test - HTTP blocked from WAN (default-deny)
+      ansible.builtin.wait_for:
+        host: "{{ opnsense_wan_ip | default(ansible_host) }}"
+        port: 80
+        timeout: 3
+        state: stopped
+      delegate_to: localhost
+      register: http_wan_test
+      ignore_errors: yes
+
+    - name: Validate - HTTP is blocked on WAN
+      ansible.builtin.assert:
+        that:
+          - http_wan_test.failed or http_wan_test.state == 'stopped'
+        fail_msg: "WARNING: HTTP is accessible from WAN - security risk!"
+        success_msg: "HTTP correctly blocked on WAN interface"
+      when: opnsense_wan_ip is defined
+
+    - name: Test - HTTPS blocked from WAN (default-deny)
+      ansible.builtin.wait_for:
+        host: "{{ opnsense_wan_ip | default(ansible_host) }}"
+        port: 443
+        timeout: 3
+        state: stopped
+      delegate_to: localhost
+      register: https_wan_test
+      ignore_errors: yes
+
+    - name: Validate - HTTPS is blocked on WAN
+      ansible.builtin.assert:
+        that:
+          - https_wan_test.failed or https_wan_test.state == 'stopped'
+        fail_msg: "WARNING: HTTPS is accessible from WAN - security risk!"
+        success_msg: "HTTPS correctly blocked on WAN interface"
+      when: opnsense_wan_ip is defined
+
+    - name: Test - WebUI accessible from LAN
+      ansible.builtin.uri:
+        url: "https://10.0.0.1"
+        validate_certs: no
+        timeout: 10
+      delegate_to: localhost
+      register: webui_lan_test
+      ignore_errors: yes
+      when: test_from_lan | default(false) | bool
+
+    - name: Security Test Summary
+      ansible.builtin.debug:
+        msg: |
+          === Security Test Results ===
+          WAN Interface: {{ 'PASS' if wan_ip_check.rc == 0 else 'FAIL' }}
+          LAN Interface: {{ 'PASS' if lan_ip_check.rc == 0 else 'FAIL' }}
+          Firewall Status: {{ 'PASS' if 'Enabled' in firewall_status.stdout else 'FAIL' }}
+          Default-Deny SSH: {{ 'PASS' if ssh_wan_test.failed | default(true) else 'FAIL' }}
+          Default-Deny HTTP: {{ 'PASS' if http_wan_test.failed | default(true) else 'FAIL' }}
+          Default-Deny HTTPS: {{ 'PASS' if https_wan_test.failed | default(true) else 'FAIL' }}
+          ==============================

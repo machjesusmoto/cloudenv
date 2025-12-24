@@ -1,0 +1,77 @@
+---
+# Libvirt Role - Main Tasks
+# Installs and configures KVM/QEMU/libvirt hypervisor
+# Constitution I: Security-First - Minimal packages, restricted access
+
+- name: Verify CPU virtualization support
+  ansible.builtin.shell: |
+    set -o pipefail
+    grep -E '(vmx|svm)' /proc/cpuinfo | head -1
+  args:
+    executable: /bin/bash
+  register: cpu_virt_check
+  changed_when: false
+  failed_when: cpu_virt_check.rc != 0
+
+- name: Install KVM/QEMU/libvirt packages
+  ansible.builtin.apt:
+    name:
+      - qemu-kvm
+      - qemu-utils
+      - libvirt-daemon-system
+      - libvirt-clients
+      - virtinst
+      - bridge-utils
+      - cpu-checker
+      - ovmf  # UEFI support for VMs
+    state: present
+    update_cache: yes
+
+- name: Ensure libvirt service is enabled and running
+  ansible.builtin.systemd:
+    name: libvirtd
+    enabled: yes
+    state: started
+
+- name: Add deploy user to libvirt groups
+  ansible.builtin.user:
+    name: deploy
+    groups:
+      - libvirt
+      - kvm
+    append: yes
+  when: create_deploy_user | default(true) | bool
+
+- name: Configure libvirt daemon settings
+  ansible.builtin.template:
+    src: libvirtd.conf.j2
+    dest: /etc/libvirt/libvirtd.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  notify: Restart libvirtd
+
+- name: Configure QEMU settings
+  ansible.builtin.template:
+    src: qemu.conf.j2
+    dest: /etc/libvirt/qemu.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  notify: Restart libvirtd
+
+- name: Include storage pool configuration
+  ansible.builtin.include_tasks: storage.yml
+  when: configure_storage_pools | default(true) | bool
+
+- name: Include network configuration
+  ansible.builtin.include_tasks: network.yml
+  when: configure_libvirt_networks | default(true) | bool
+
+- name: Verify KVM is operational
+  ansible.builtin.command: kvm-ok
+  register: kvm_check
+  changed_when: false
+  failed_when: kvm_check.rc != 0

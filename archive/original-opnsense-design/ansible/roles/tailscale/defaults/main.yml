@@ -1,0 +1,36 @@
+---
+# Tailscale Role - Default Variables
+
+# Authentication
+tailscale_auth_key: ""  # From vault - pre-authenticated key
+tailscale_auth_key_reusable: false
+tailscale_auth_key_ephemeral: false
+
+# Subnet routing (Constitution I: Security via VPN only)
+tailscale_advertise_routes:
+  - "10.0.0.0/24"
+tailscale_accept_routes: true
+
+# Exit node configuration
+tailscale_exit_node: false
+tailscale_exit_node_allow_lan_access: true
+
+# Hostname and tags
+tailscale_hostname: "opnsense-vps"
+tailscale_tags: []
+
+# Connection settings
+tailscale_login_server: ""  # Empty for default (login.tailscale.com)
+tailscale_shields_up: false
+
+# DNS settings
+tailscale_accept_dns: true
+
+# OPNsense-specific settings
+tailscale_opnsense_plugin: true
+tailscale_opnsense_plugin_version: "latest"
+
+# Firewall integration
+tailscale_interface: "tailscale0"
+tailscale_allow_from_lan: true
+tailscale_allow_from_tailnet: true

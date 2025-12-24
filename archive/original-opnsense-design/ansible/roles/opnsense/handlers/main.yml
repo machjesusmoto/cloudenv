@@ -1,0 +1,35 @@
+---
+# OPNsense Role - Handlers
+
+- name: Restart SSH
+  ansible.builtin.raw: |
+    /usr/local/etc/rc.d/openssh restart
+
+- name: Reload firewall
+  ansible.builtin.raw: |
+    /usr/local/etc/rc.filter_configure
+
+- name: Restart WebUI
+  ansible.builtin.raw: |
+    /usr/local/etc/rc.restart_webgui
+
+- name: Apply configuration
+  ansible.builtin.raw: |
+    /usr/local/etc/rc.reload_all
+
+# T073: Logging handlers
+- name: Restart syslog
+  ansible.builtin.raw: |
+    /etc/rc.d/syslogd restart
+
+- name: Restart newsyslog
+  ansible.builtin.raw: |
+    /usr/sbin/newsyslog
+
+- name: Reload OPNsense config
+  ansible.builtin.raw: |
+    /usr/local/etc/rc.filter_configure
+
+- name: Restart sshd
+  ansible.builtin.raw: |
+    /usr/local/etc/rc.d/openssh restart

@@ -1,0 +1,26 @@
+# QEMU Configuration
+# Managed by Ansible - Do not edit manually
+# Constitution I: Security-First - Restricted permissions
+
+# Security driver (apparmor on Ubuntu)
+security_driver = "{{ qemu_security_driver }}"
+
+# Process user/group
+user = "{{ qemu_user }}"
+group = "{{ qemu_group }}"
+
+# Dynamic ownership
+dynamic_ownership = 1
+
+# Memory settings
+# Allow memory overcommit for better VM density
+remember_owner = 1
+
+# Capabilities - drop unnecessary capabilities
+clear_emulator_capabilities = 1
+
+# NVRAM paths for UEFI
+nvram = [
+    "/usr/share/OVMF/OVMF_CODE.fd:/usr/share/OVMF/OVMF_VARS.fd",
+    "/usr/share/OVMF/OVMF_CODE.secboot.fd:/usr/share/OVMF/OVMF_VARS.fd"
+]

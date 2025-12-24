@@ -1,0 +1,11 @@
+---
+# Common Role - Handlers
+
+- name: Restart SSH
+  ansible.builtin.systemd:
+    name: sshd
+    state: restarted
+
+- name: Reload UFW
+  community.general.ufw:
+    state: reloaded

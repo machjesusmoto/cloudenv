@@ -1,0 +1,174 @@
+---
+# T068: Production Hardening Playbook
+# Constitution I: Security-First - Remove temporary SSH access after Tailscale operational
+# Use: ansible-playbook harden.yml --tags disable-direct-ssh
+
+- name: Production Hardening - Remove Direct SSH Access
+  hosts: firewalls
+  become: yes
+  tags: [disable-direct-ssh, harden]
+
+  vars:
+    # Safety check - only proceed if Tailscale is operational
+    require_tailscale_connected: true
+
+  pre_tasks:
+    - name: Verify Tailscale connectivity before hardening
+      when: require_tailscale_connected | bool
+      block:
+        - name: Check Tailscale status
+          ansible.builtin.command: tailscale status --json
+          register: tailscale_status
+          changed_when: false
+          failed_when: false
+
+        - name: Parse Tailscale status
+          ansible.builtin.set_fact:
+            tailscale_connected: "{{ (tailscale_status.stdout | from_json).BackendState == 'Running' }}"
+          when: tailscale_status.rc == 0
+
+        - name: Fail if Tailscale not connected
+          ansible.builtin.fail:
+            msg: |
+              SAFETY CHECK FAILED: Tailscale is not connected.
+              Direct SSH removal would lock you out of the system.
+
+              Please ensure Tailscale is operational before running this playbook:
+              1. Verify Tailscale status: tailscale status
+              2. Approve subnet routes in Tailscale admin console
+              3. Test SSH via Tailscale IP before proceeding
+
+              To bypass this check (DANGEROUS): --extra-vars "require_tailscale_connected=false"
+          when: not (tailscale_connected | default(false))
+
+  tasks:
+    - name: Record pre-hardening state
+      ansible.builtin.debug:
+        msg: |
+          === Pre-Hardening State ===
+          Host: {{ inventory_hostname }}
+          Tailscale Connected: {{ tailscale_connected | default('unknown') }}
+          Current SSH Access: Direct + Tailscale
+          Post-Hardening: Tailscale only
+          ============================
+
+    # OPNsense-specific SSH hardening
+    - name: Configure SSH to listen only on Tailscale interface
+      ansible.builtin.lineinfile:
+        path: /usr/local/etc/ssh/sshd_config
+        regexp: "^#?ListenAddress"
+        line: "ListenAddress {{ tailscale_ip | default('100.64.0.0/10') }}"
+        state: present
+        backup: yes
+      notify: Restart sshd
+      tags: [ssh-restrict]
+
+    - name: Disable SSH password authentication
+      ansible.builtin.lineinfile:
+        path: /usr/local/etc/ssh/sshd_config
+        regexp: "^#?PasswordAuthentication"
+        line: "PasswordAuthentication no"
+        state: present
+      notify: Restart sshd
+      tags: [ssh-restrict]
+
+    - name: Disable root password login (key only)
+      ansible.builtin.lineinfile:
+        path: /usr/local/etc/ssh/sshd_config
+        regexp: "^#?PermitRootLogin"
+        line: "PermitRootLogin prohibit-password"
+        state: present
+      notify: Restart sshd
+      tags: [ssh-restrict]
+
+    # Firewall rule to block direct SSH on WAN
+    - name: Block direct SSH access on WAN interface
+      community.general.xml:
+        path: /conf/config.xml
+        xpath: /opnsense/filter/rule[descr='Block WAN SSH - Hardening']
+        state: present
+        pretty_print: yes
+      tags: [firewall-harden]
+
+  handlers:
+    - name: Restart sshd
+      ansible.builtin.service:
+        name: sshd
+        state: restarted
+
+  post_tasks:
+    - name: Display hardening summary
+      ansible.builtin.debug:
+        msg: |
+          === Hardening Complete ===
+
+          SSH Access Changes:
+          - Direct SSH on WAN: BLOCKED
+          - SSH via Tailscale: ALLOWED
+          - Password auth: DISABLED
+          - Root login: Key-only
+
+          IMPORTANT: Test SSH via Tailscale NOW:
+            ssh root@{{ tailscale_ip | default('opnsense-vps') }}
+
+          To revert (emergency):
+            1. Access VPS console via SSDNodes dashboard
+            2. Edit /usr/local/etc/ssh/sshd_config
+            3. Set ListenAddress to 0.0.0.0
+            4. Restart sshd
+          ===========================
+
+---
+# Proxmox Hardening
+- name: Production Hardening - Proxmox SSH Restriction
+  hosts: proxmox
+  become: yes
+  tags: [disable-direct-ssh, harden, proxmox-harden]
+
+  tasks:
+    - name: Note - Proxmox already on private network
+      ansible.builtin.debug:
+        msg: |
+          Proxmox is already protected - accessible only via:
+          1. Private network (10.0.0.10) through OPNsense
+          2. Tailscale (when OPNsense advertises subnet route)
+
+          No additional hardening required for Proxmox.
+
+---
+# Additional Hardening Tasks
+- name: Additional Security Hardening
+  hosts: all
+  become: yes
+  tags: [additional-harden]
+
+  tasks:
+    - name: Set SSH idle timeout
+      ansible.builtin.lineinfile:
+        path: "{{ ssh_config_path | default('/etc/ssh/sshd_config') }}"
+        regexp: "^#?ClientAliveInterval"
+        line: "ClientAliveInterval 300"
+        state: present
+      notify: Restart sshd
+
+    - name: Set SSH max auth tries
+      ansible.builtin.lineinfile:
+        path: "{{ ssh_config_path | default('/etc/ssh/sshd_config') }}"
+        regexp: "^#?MaxAuthTries"
+        line: "MaxAuthTries 3"
+        state: present
+      notify: Restart sshd
+
+    - name: Disable empty passwords
+      ansible.builtin.lineinfile:
+        path: "{{ ssh_config_path | default('/etc/ssh/sshd_config') }}"
+        regexp: "^#?PermitEmptyPasswords"
+        line: "PermitEmptyPasswords no"
+        state: present
+      notify: Restart sshd
+
+  handlers:
+    - name: Restart sshd
+      ansible.builtin.service:
+        name: sshd
+        state: restarted

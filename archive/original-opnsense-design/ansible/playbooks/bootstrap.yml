@@ -1,0 +1,96 @@
+---
+# Bootstrap Playbook - Initial VPS Setup
+# Constitution II: Reliability Through Simplicity
+# Constitution III: Infrastructure as Code
+
+- name: Bootstrap VPS Host
+  hosts: hypervisors
+  become: yes
+  gather_facts: yes
+
+  vars:
+    bootstrap_phase: "initial"
+
+  pre_tasks:
+    - name: Display bootstrap information
+      ansible.builtin.debug:
+        msg: |
+          === CloudEnv Bootstrap ===
+          Target Host: {{ inventory_hostname }}
+          Ansible Host: {{ ansible_host }}
+          Bootstrap Phase: {{ bootstrap_phase }}
+          ===========================
+
+    - name: Verify connectivity
+      ansible.builtin.ping:
+
+    - name: Gather facts
+      ansible.builtin.setup:
+        gather_subset:
+          - hardware
+          - network
+          - virtual
+
+    - name: Verify minimum requirements
+      ansible.builtin.assert:
+        that:
+          - ansible_memtotal_mb >= 8000
+          - ansible_processor_vcpus >= 2
+        fail_msg: "Host does not meet minimum requirements (8GB RAM, 2 vCPUs)"
+        success_msg: "Host meets minimum requirements"
+
+  roles:
+    - role: common
+      tags: [common, base]
+
+    - role: libvirt
+      tags: [libvirt, hypervisor]
+      when: enable_libvirt | default(true) | bool
+
+  post_tasks:
+    - name: Verify libvirt is operational
+      ansible.builtin.command: virsh version
+      register: virsh_version
+      changed_when: false
+      when: enable_libvirt | default(true) | bool
+
+    - name: Display libvirt version
+      ansible.builtin.debug:
+        var: virsh_version.stdout_lines
+      when: enable_libvirt | default(true) | bool
+
+    - name: Verify storage pools
+      ansible.builtin.command: virsh pool-list --all
+      register: pool_list
+      changed_when: false
+      when: enable_libvirt | default(true) | bool
+
+    - name: Display storage pools
+      ansible.builtin.debug:
+        var: pool_list.stdout_lines
+      when: enable_libvirt | default(true) | bool
+
+    - name: Verify networks
+      ansible.builtin.command: virsh net-list --all
+      register: net_list
+      changed_when: false
+      when: enable_libvirt | default(true) | bool
+
+    - name: Display networks
+      ansible.builtin.debug:
+        var: net_list.stdout_lines
+      when: enable_libvirt | default(true) | bool
+
+    - name: Bootstrap completion summary
+      ansible.builtin.debug:
+        msg: |
+          === Bootstrap Complete ===
+          Host: {{ inventory_hostname }}
+          Common role: Applied
+          Libvirt role: {{ 'Applied' if enable_libvirt | default(true) else 'Skipped' }}
+          Next Steps:
+            1. Run Terraform to provision VMs
+            2. Deploy OPNsense firewall
+            3. Deploy Proxmox VE
+            4. Configure Tailscale VPN
+          ===========================

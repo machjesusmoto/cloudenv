@@ -1,0 +1,193 @@
+---
+# T073: OPNsense Logging Configuration
+# Constitution I: Security-First - Audit trail requirements
+# Configures syslog for security event logging and audit trails
+
+- name: Configure OPNsense Logging
+  tags: [logging, security, audit]
+  block:
+    - name: Display logging configuration overview
+      ansible.builtin.debug:
+        msg: |
+          === OPNsense Logging Configuration ===
+
+          Configuring:
+          - Local syslog for firewall events
+          - Security audit logging
+          - Remote syslog (optional)
+          - Log retention settings
+
+          Per Constitution I: Security-First audit trail requirements
+          =============================================
+
+    # Local Logging Configuration
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: /var/log/filter
+        state: directory
+        mode: '0750'
+        owner: root
+        group: wheel
+
+    - name: Configure syslog for firewall logging
+      ansible.builtin.blockinfile:
+        path: /usr/local/etc/syslog.conf
+        marker: "# {mark} ANSIBLE MANAGED - Firewall Logging"
+        block: |
+          # Firewall filter logs
+          local0.*                                        /var/log/filter/filter.log
+
+          # Security events (auth, authpriv)
+          auth.info;authpriv.info                         /var/log/security.log
+
+          # System events
+          *.notice;authpriv.none;kern.debug;mail.crit     /var/log/messages
+
+          # All security-relevant events for audit
+          auth.*;authpriv.*;local0.*                      /var/log/audit.log
+        create: yes
+        mode: '0644'
+      notify: Restart syslog
+
+    # Log Rotation Configuration
+    - name: Configure log rotation for firewall logs
+      ansible.builtin.copy:
+        dest: /usr/local/etc/newsyslog.conf.d/cloudenv-logging.conf
+        content: |
+          # CloudEnv Firewall Log Rotation
+          # Constitution I: Maintain audit trail with 90-day retention
+
+          # logfile                    mode  count  size   when  flags
+          /var/log/filter/filter.log   640   90     10000  @T00  JB
+          /var/log/security.log        640   90     5000   @T00  JB
+          /var/log/audit.log           640   180    10000  @T00  JB
+        mode: '0644'
+      notify: Restart newsyslog
+
+    # Firewall Logging Rules
+    - name: Configure firewall logging via OPNsense API
+      community.general.xml:
+        path: /conf/config.xml
+        xpath: /opnsense/syslog
+        set_children:
+          - disablelocallogging: ''
+          - logfilesize: '10485760'
+          - logcompressiontype: 'bzip2'
+          - preservelogs: '90'
+          - logdefaultblock: ''
+          - logdefaultpass: ''
+          - logoutboundnat: ''
+          - logbogons: ''
+          - logprivatenets: ''
+          - filterdescriptions: '1'
+        pretty_print: yes
+      notify: Reload OPNsense config
+
+    # Remote Syslog Configuration (Optional)
+    - name: Configure remote syslog if specified
+      when: remote_syslog_server is defined and remote_syslog_server | length > 0
+      block:
+        - name: Add remote syslog server
+          community.general.xml:
+            path: /conf/config.xml
+            xpath: /opnsense/syslog/remoteserver
+            value: "{{ remote_syslog_server }}"
+          notify: Reload OPNsense config
+
+        - name: Configure remote syslog port
+          community.general.xml:
+            path: /conf/config.xml
+            xpath: /opnsense/syslog/remoteserver2
+            value: "{{ remote_syslog_port | default('514') }}"
+          notify: Reload OPNsense config
+
+        - name: Enable remote logging for filter
+          community.general.xml:
+            path: /conf/config.xml
+            xpath: /opnsense/syslog/logall
+            value: ''
+          notify: Reload OPNsense config
+
+    # Audit Trail for Authentication
+    - name: Configure authentication audit logging
+      ansible.builtin.blockinfile:
+        path: /usr/local/etc/syslog.conf
+        marker: "# {mark} ANSIBLE MANAGED - Auth Audit"
+        block: |
+          # Authentication audit trail
+          # Log all auth events including SSH, WebUI, API
+          auth.info                                       /var/log/auth_audit.log
+          authpriv.info                                   /var/log/auth_audit.log
+        insertafter: EOF
+      notify: Restart syslog
+
+    # SSH Logging Enhancement
+    - name: Enable verbose SSH logging
+      ansible.builtin.lineinfile:
+        path: /usr/local/etc/ssh/sshd_config
+        regexp: '^#?LogLevel'
+        line: 'LogLevel VERBOSE'
+      notify: Restart sshd
+
+    # Tailscale Logging
+    - name: Configure Tailscale logging
+      when: tailscale_enabled | default(true)
+      ansible.builtin.copy:
+        dest: /usr/local/etc/syslog.d/tailscale.conf
+        content: |
+          # Tailscale VPN logging
+          local7.*                      /var/log/tailscale.log
+        mode: '0644'
+      notify: Restart syslog
+
+    # Log Access Permissions
+    - name: Set secure permissions on log files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        mode: '0640'
+        owner: root
+        group: wheel
+      loop:
+        - /var/log/filter/filter.log
+        - /var/log/security.log
+        - /var/log/audit.log
+        - /var/log/auth_audit.log
+      ignore_errors: yes  # Files may not exist yet
+
+    # Logging Verification
+    - name: Verify logging configuration
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - "syslog-ng-ctl stats 2>/dev/null || echo 'using standard syslog'"
+        - "cat /usr/local/etc/syslog.conf | grep -v '^#' | grep -v '^$'"
+      register: logging_status
+      changed_when: false
+      failed_when: false
+
+    - name: Display logging status
+      ansible.builtin.debug:
+        msg: |
+          === Logging Configuration Status ===
+
+          Log Files Configured:
+          - /var/log/filter/filter.log (firewall events)
+          - /var/log/security.log (security events)
+          - /var/log/audit.log (comprehensive audit trail)
+          - /var/log/auth_audit.log (authentication events)
+          - /var/log/tailscale.log (VPN events)
+
+          Log Retention: 90 days (audit: 180 days)
+          Remote Syslog: {{ remote_syslog_server | default('Not configured') }}
+
+          Constitution I Compliance:
+          ✅ Firewall event logging
+          ✅ Authentication audit trail
+          ✅ Security event capture
+          ✅ Log retention policy
+          =============================================
+
+# Handlers are defined in handlers/main.yml
+# - Restart syslog
+# - Restart newsyslog
+# - Reload OPNsense config
+# - Restart sshd

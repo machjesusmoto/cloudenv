@@ -1,0 +1,60 @@
+---
+# Proxmox Role - Default Variables
+# Constitution II: Reliability Through Simplicity - Clear defaults
+
+# VM Configuration
+proxmox_hostname: "proxmox"
+proxmox_domain: "cloudenv.local"
+
+# Network Configuration
+proxmox_ip: "10.0.0.10"
+proxmox_netmask: "255.255.255.0"
+proxmox_gateway: "10.0.0.1"
+proxmox_dns_servers:
+  - "10.0.0.1"
+  - "1.1.1.1"
+
+# Proxmox Version
+proxmox_version: "8"
+proxmox_release: "bookworm"
+
+# Repository Configuration
+proxmox_enterprise_repo: false  # Use no-subscription repo by default
+proxmox_repo_url: "http://download.proxmox.com/debian/pve"
+
+# Storage Configuration
+proxmox_storage_local_path: "/var/lib/vz"
+proxmox_storage_local_lvm_enabled: true
+proxmox_storage_data_disk: "/dev/sdb"  # Data disk device
+proxmox_storage_data_mount: "/mnt/pve-data"
+
+# Web UI Configuration
+proxmox_web_port: 8006
+proxmox_web_ssl_enabled: true
+
+# SSH Configuration
+proxmox_ssh_port: 22
+proxmox_ssh_key_only: true
+proxmox_ssh_root_login: "prohibit-password"
+
+# User Configuration (passwords from vault)
+proxmox_root_password: ""  # Set via vault
+proxmox_create_admin_user: false
+proxmox_admin_username: "admin"
+proxmox_admin_password: ""  # Set via vault
+
+# Cluster Configuration (single node)
+proxmox_cluster_enabled: false
+proxmox_cluster_name: "cloudenv"
+
+# Package Installation
+proxmox_packages:
+  - proxmox-ve
+  - postfix
+  - open-iscsi
+  - chrony
+
+# Post-Install Configuration
+proxmox_remove_subscription_notice: true
+proxmox_enable_pcie_passthrough: false
+proxmox_enable_iommu: false

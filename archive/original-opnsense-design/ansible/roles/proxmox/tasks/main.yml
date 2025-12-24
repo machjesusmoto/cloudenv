@@ -1,0 +1,121 @@
+---
+# Proxmox Role - Main Tasks
+# T056: Proxmox VE installation
+# Constitution I: Security-First - Accessible only via Tailscale VPN
+
+- name: Display Proxmox deployment info
+  ansible.builtin.debug:
+    msg: |
+      === Proxmox VE Deployment ===
+      Hostname: {{ proxmox_hostname }}
+      IP Address: {{ proxmox_ip }}
+      Version: Proxmox VE {{ proxmox_version }}
+      Web UI: https://{{ proxmox_ip }}:{{ proxmox_web_port }}
+      ==============================
+
+- name: Wait for cloud-init to complete
+  ansible.builtin.wait_for:
+    path: /var/lib/cloud/instance/proxmox-ready
+    timeout: 600
+  ignore_errors: true
+
+- name: Set hostname
+  ansible.builtin.hostname:
+    name: "{{ proxmox_hostname }}"
+
+- name: Configure /etc/hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: "{{ proxmox_ip }} {{ proxmox_hostname }}.{{ proxmox_domain }} {{ proxmox_hostname }}"
+    state: present
+
+- name: Add Proxmox GPG key
+  ansible.builtin.apt_key:
+    url: https://enterprise.proxmox.com/debian/proxmox-release-{{ proxmox_release }}.gpg
+    state: present
+
+- name: Add Proxmox no-subscription repository
+  ansible.builtin.apt_repository:
+    repo: "deb {{ proxmox_repo_url }} {{ proxmox_release }} pve-no-subscription"
+    state: present
+    filename: pve-no-subscription
+  when: not proxmox_enterprise_repo
+
+- name: Remove enterprise repository if not licensed
+  ansible.builtin.apt_repository:
+    repo: "deb https://enterprise.proxmox.com/debian/pve {{ proxmox_release }} pve-enterprise"
+    state: absent
+    filename: pve-enterprise
+  when: not proxmox_enterprise_repo
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install Proxmox VE packages
+  ansible.builtin.apt:
+    name: "{{ proxmox_packages }}"
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  notify:
+    - Restart pveproxy
+    - Restart pvedaemon
+
+- name: Remove subscription notice (optional)
+  ansible.builtin.replace:
+    path: /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
+    regexp: "Ext.Msg.show\\(\\{\\s*title:\\s*gettext\\('No valid subscription'\\)"
+    replace: "void({ //Ext.Msg.show({ title: gettext('No valid subscription')"
+  when: proxmox_remove_subscription_notice
+  notify: Restart pveproxy
+  failed_when: false
+
+- name: Configure network
+  ansible.builtin.include_tasks: network.yml
+
+- name: Configure storage
+  ansible.builtin.include_tasks: storage.yml
+
+- name: Configure users and authentication
+  ansible.builtin.include_tasks: users.yml
+
+- name: Enable and start Proxmox services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  loop:
+    - pveproxy
+    - pvedaemon
+    - pvestatd
+    - pvescheduler
+
+- name: Wait for Proxmox web UI to be available
+  ansible.builtin.uri:
+    url: "https://{{ proxmox_ip }}:{{ proxmox_web_port }}"
+    method: GET
+    validate_certs: no
+    status_code: [200, 301, 302, 401]
+  register: pve_webui
+  until: pve_webui.status in [200, 301, 302, 401]
+  retries: 30
+  delay: 10
+
+- name: Proxmox installation complete
+  ansible.builtin.debug:
+    msg: |
+      === Proxmox VE Installation Complete ===
+
+      Access Web UI (via Tailscale only):
+        URL: https://{{ proxmox_ip }}:{{ proxmox_web_port }}
+        Username: root@pam
+        Password: (from vault)
+
+      SSH Access (via Tailscale only):
+        ssh root@{{ proxmox_ip }}
+
+      Note: All access is restricted to Tailscale VPN
+      per Constitution I (Security-First)
+      =========================================

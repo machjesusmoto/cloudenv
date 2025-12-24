@@ -1,0 +1,36 @@
+---
+# Host Firewall Tasks (UFW)
+# Basic host-level firewall - OPNsense handles main security
+
+- name: Install UFW
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+- name: Set UFW default incoming policy
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+
+- name: Set UFW default outgoing policy
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+
+- name: Allow SSH through UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ ssh_port | default(22) }}"
+    proto: tcp
+
+- name: Allow libvirt management (local only)
+  community.general.ufw:
+    rule: allow
+    port: 16509
+    proto: tcp
+    from_ip: 127.0.0.1
+  when: enable_libvirt | default(false) | bool
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled

@@ -1,0 +1,83 @@
+---
+# Proxmox VE Deployment Playbook
+# T060: Orchestrating Proxmox deployment
+# Constitution I: Security-First - Accessible only via Tailscale VPN
+# Constitution III: Infrastructure as Code
+
+- name: Deploy Proxmox VE
+  hosts: proxmox
+  gather_facts: yes
+  become: yes
+
+  vars:
+    deployment_phase: "proxmox"
+
+  pre_tasks:
+    - name: Display deployment information
+      ansible.builtin.debug:
+        msg: |
+          === Proxmox VE Deployment ===
+          Target: {{ inventory_hostname }}
+          Host: {{ ansible_host }}
+          Phase: {{ deployment_phase }}
+          ==============================
+      delegate_to: localhost
+
+    - name: Verify Proxmox host is reachable
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        timeout: 300
+      delegate_to: localhost
+
+    - name: Verify OPNsense gateway is reachable
+      ansible.builtin.command: ping -c 3 {{ proxmox_gateway | default('10.0.0.1') }}
+      register: gateway_check
+      changed_when: false
+      failed_when: false
+
+    - name: Assert gateway connectivity
+      ansible.builtin.assert:
+        that:
+          - gateway_check.rc == 0
+        fail_msg: "Cannot reach OPNsense gateway at {{ proxmox_gateway | default('10.0.0.1') }}"
+
+  roles:
+    - role: proxmox
+      tags: [proxmox, virtualization]
+
+  post_tasks:
+    - name: Run Proxmox storage validation tests
+      ansible.builtin.include_tasks: ../tests/connectivity.yml
+      tags: [test, storage]
+      when: run_storage_tests | default(false) | bool
+
+    - name: Deployment summary
+      ansible.builtin.debug:
+        msg: |
+          === Proxmox VE Deployment Complete ===
+          Host: {{ inventory_hostname }}
+          IP: {{ proxmox_ip | default('10.0.0.10') }}
+
+          Access (via Tailscale only):
+            Web UI: https://{{ proxmox_ip | default('10.0.0.10') }}:8006
+            SSH: ssh root@{{ proxmox_ip | default('10.0.0.10') }}
+
+          Login Credentials:
+            Username: root@pam
+            Password: (from ansible vault)
+
+          Storage Pools:
+            - local: ISO images, backups
+            - local-lvm: VM disk images (if configured)
+
+          Next Steps:
+            1. Access Web UI via Tailscale
+            2. Upload ISOs for VM creation
+            3. Create your first VM
+
+          Security Note:
+            All access is restricted to Tailscale VPN
+            per Constitution I (Security-First)
+          ========================================
+      delegate_to: localhost

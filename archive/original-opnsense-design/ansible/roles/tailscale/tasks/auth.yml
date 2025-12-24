@@ -1,0 +1,79 @@
+---
+# Tailscale Authentication Tasks
+# Constitution I: Security-First - Pre-authenticated key from vault
+
+- name: Check current Tailscale authentication status
+  ansible.builtin.raw: |
+    tailscale status 2>&1 || /usr/local/bin/tailscale status 2>&1
+  register: auth_check
+  changed_when: false
+  failed_when: false
+
+- name: Determine if authentication needed
+  ansible.builtin.set_fact:
+    needs_auth: "{{ 'Logged out' in auth_check.stdout or 'not logged in' in auth_check.stdout | lower or auth_check.rc != 0 }}"
+
+- name: Authenticate with Tailscale (using auth key)
+  ansible.builtin.raw: |
+    tailscale up \
+      --authkey="{{ tailscale_auth_key }}" \
+      --hostname="{{ tailscale_hostname }}" \
+      {% if tailscale_login_server %}--login-server="{{ tailscale_login_server }}"{% endif %} \
+      --accept-routes={{ tailscale_accept_routes | lower }} \
+      --accept-dns={{ tailscale_accept_dns | lower }} \
+      || /usr/local/bin/tailscale up \
+      --authkey="{{ tailscale_auth_key }}" \
+      --hostname="{{ tailscale_hostname }}" \
+      {% if tailscale_login_server %}--login-server="{{ tailscale_login_server }}"{% endif %} \
+      --accept-routes={{ tailscale_accept_routes | lower }} \
+      --accept-dns={{ tailscale_accept_dns | lower }}
+  when:
+    - needs_auth | bool
+    - tailscale_auth_key | length > 0
+  no_log: true  # Hide auth key from logs
+
+- name: Display authentication instructions (if no auth key)
+  ansible.builtin.debug:
+    msg: |
+      === Manual Authentication Required ===
+      No auth key provided. To authenticate:
+
+      1. SSH to the OPNsense firewall
+      2. Run: tailscale up --hostname={{ tailscale_hostname }}
+      3. Follow the authentication URL
+      4. Approve the device in Tailscale admin console
+
+      Or provide an auth key via Ansible vault:
+      tailscale_auth_key: "tskey-auth-xxxxx"
+      ========================================
+  when:
+    - needs_auth | bool
+    - tailscale_auth_key | length == 0
+
+- name: Wait for Tailscale connection
+  ansible.builtin.raw: |
+    for i in $(seq 1 30); do
+      status=$(tailscale status 2>&1 || /usr/local/bin/tailscale status 2>&1)
+      if echo "$status" | grep -qiE "connected|online"; then
+        echo "Connected"
+        exit 0
+      fi
+      sleep 2
+    done
+    echo "Timeout waiting for connection"
+    exit 1
+  register: connection_wait
+  changed_when: false
+  when: tailscale_auth_key | length > 0
+
+- name: Verify authentication successful
+  ansible.builtin.raw: |
+    tailscale ip -4 || /usr/local/bin/tailscale ip -4
+  register: tailscale_ip
+  changed_when: false
+  failed_when: tailscale_ip.rc != 0 and tailscale_auth_key | length > 0
+
+- name: Display Tailscale IP
+  ansible.builtin.debug:
+    msg: "Tailscale IP assigned: {{ tailscale_ip.stdout | trim }}"
+  when: tailscale_ip.rc == 0

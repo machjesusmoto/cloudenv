@@ -1,0 +1,78 @@
+---
+# OPNsense Tailscale Firewall Rules
+# Constitution I: Security-First - Allow Tailscale while maintaining security
+
+- name: Display Tailscale firewall integration info
+  ansible.builtin.debug:
+    msg: |
+      === Tailscale Firewall Integration ===
+      Configuring OPNsense firewall rules for Tailscale interface.
+
+      Rules to be applied:
+      1. Allow Tailscale interface (tailscale0) traffic
+      2. Allow traffic from Tailscale to LAN
+      3. Allow traffic from LAN to Tailscale network
+      4. Block direct WAN access (maintain security)
+      ========================================
+
+- name: Check if Tailscale interface exists
+  ansible.builtin.raw: |
+    ifconfig | grep -E "tailscale|utun" || echo "Tailscale interface not yet active"
+  register: tailscale_if_check
+  changed_when: false
+
+- name: Display Tailscale interface status
+  ansible.builtin.debug:
+    var: tailscale_if_check.stdout_lines
+
+# OPNsense firewall rules are typically managed via config.xml or API
+# These verification tasks ensure the rules are in place
+
+- name: Verify Tailscale traffic is allowed
+  ansible.builtin.raw: |
+    pfctl -sr | grep -iE "tailscale|100\.64\." || echo "Tailscale rules may need configuration"
+  register: tailscale_rules_check
+  changed_when: false
+  failed_when: false
+
+- name: Display current Tailscale-related rules
+  ansible.builtin.debug:
+    var: tailscale_rules_check.stdout_lines
+
+- name: Tailscale firewall configuration instructions
+  ansible.builtin.debug:
+    msg: |
+      === Manual Firewall Configuration ===
+      If Tailscale rules are not present, configure via OPNsense WebUI:
+
+      1. Go to Firewall > Rules > Tailscale
+      2. Add rule: Allow all from Tailscale interface
+         - Action: Pass
+         - Interface: Tailscale
+         - Source: any
+         - Destination: LAN net
+         - Description: Allow Tailscale to LAN
+
+      3. Add rule: Allow all from LAN to Tailscale
+         - Action: Pass
+         - Interface: LAN
+         - Source: LAN net
+         - Destination: 100.64.0.0/10 (Tailscale CGNAT)
+         - Description: Allow LAN to Tailscale
+
+      4. Apply changes
+
+      Note: The OPNsense Tailscale plugin typically creates
+      these rules automatically.
+      ======================================
+
+- name: Verify NAT rules for Tailscale subnet
+  ansible.builtin.raw: |
+    pfctl -sn | grep -iE "10\.0\.0\." || echo "NAT rules for private subnet"
+  register: nat_check
+  changed_when: false
+  failed_when: false
+
+- name: Display NAT rules
+  ansible.builtin.debug:
+    var: nat_check.stdout_lines

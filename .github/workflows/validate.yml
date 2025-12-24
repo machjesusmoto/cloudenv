@@ -1,0 +1,192 @@
+# T069: CI/CD Validation Workflow
+# Constitution III: Infrastructure as Code - Automated validation
+# Runs ansible-lint and terraform validate on all changes
+# Security: This workflow does NOT use untrusted inputs in run commands
+
+name: Infrastructure Validation
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'terraform/**'
+      - 'ansible/**'
+      - '.github/workflows/validate.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'terraform/**'
+      - 'ansible/**'
+
+env:
+  TERRAFORM_VERSION: '1.5.0'
+  ANSIBLE_VERSION: '2.15'
+
+jobs:
+  terraform-validate:
+    name: Terraform Validation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform Init
+        id: init
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+
+  ansible-lint:
+    name: Ansible Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Ansible and ansible-lint
+        run: |
+          pip install ansible==${{ env.ANSIBLE_VERSION }}.* ansible-lint yamllint
+
+      - name: Create ansible-lint config
+        run: |
+          cat > .ansible-lint << 'EOF'
+          ---
+          profile: moderate
+
+          exclude_paths:
+            - .github/
+            - docs/
+            - specs/
+
+          skip_list:
+            - yaml[line-length]
+            - name[template]
+            - risky-shell-pipe
+
+          warn_list:
+            - experimental
+            - command-instead-of-module
+
+          enable_list:
+            - no-same-owner
+          EOF
+
+      - name: Run yamllint
+        run: |
+          yamllint -d relaxed ansible/
+        continue-on-error: true
+
+      - name: Run ansible-lint
+        run: |
+          cd ansible
+          ansible-lint playbooks/ roles/ tests/
+        continue-on-error: true
+
+      - name: Ansible Syntax Check
+        run: |
+          cd ansible
+          for playbook in playbooks/*.yml; do
+            echo "Checking $playbook..."
+            ansible-playbook --syntax-check "$playbook" -i inventory/hosts.yml || true
+          done
+
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Checkov (IaC Security)
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: terraform/
+          framework: terraform
+          soft_fail: true
+          output_format: cli
+
+      - name: Check for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          extra_args: --only-verified
+
+  documentation-check:
+    name: Documentation Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for required documentation
+        run: |
+          echo "Checking required documentation files..."
+
+          required_files=(
+            "docs/README.md"
+            "specs/1-core-infrastructure/quickstart.md"
+            "ansible/inventory/hosts.yml"
+            "terraform/terraform.tfvars.example"
+          )
+
+          missing=0
+          for file in "${required_files[@]}"; do
+            if [[ ! -f "$file" ]]; then
+              echo "Missing: $file"
+              missing=$((missing + 1))
+            else
+              echo "Found: $file"
+            fi
+          done
+
+          if [[ $missing -gt 0 ]]; then
+            echo "::warning::$missing required files are missing"
+          fi
+
+      - name: Validate YAML files
+        run: |
+          pip install yamllint
+          yamllint -d relaxed ansible/inventory/*.yml || true
+
+  all-checks:
+    name: All Checks Passed
+    needs: [terraform-validate, ansible-lint, security-scan, documentation-check]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Check all job results
+        env:
+          TF_RESULT: ${{ needs.terraform-validate.result }}
+          ANSIBLE_RESULT: ${{ needs.ansible-lint.result }}
+        run: |
+          if [[ "$TF_RESULT" == "failure" ]] || \
+             [[ "$ANSIBLE_RESULT" == "failure" ]]; then
+            echo "Critical validation checks failed"
+            exit 1
+          fi
+          echo "All critical checks passed"

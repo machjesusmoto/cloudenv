@@ -1,0 +1,60 @@
+---
+# OPNsense SSH Configuration
+# Constitution I: Security-First - Key-based auth only
+
+- name: Verify SSH service status
+  ansible.builtin.raw: |
+    /usr/local/etc/rc.d/openssh status || echo "SSH status check"
+  register: ssh_status
+  changed_when: false
+  failed_when: false
+
+- name: Ensure SSH is enabled
+  ansible.builtin.raw: |
+    /usr/local/etc/rc.d/openssh start || true
+  when: opnsense_ssh_enabled | bool
+  changed_when: false
+
+- name: Configure SSH - Disable password authentication
+  ansible.builtin.raw: |
+    # Check current PasswordAuthentication setting
+    grep -q "^PasswordAuthentication no" /etc/ssh/sshd_config && echo "Already configured" || \
+    (sed -i.bak 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config && echo "Updated")
+  register: ssh_password_config
+  changed_when: "'Updated' in ssh_password_config.stdout"
+  when: not opnsense_ssh_password_auth | bool
+
+- name: Configure SSH - Permit root login with key only
+  ansible.builtin.raw: |
+    grep -q "^PermitRootLogin prohibit-password" /etc/ssh/sshd_config && echo "Already configured" || \
+    (sed -i.bak 's/^#*PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config && echo "Updated")
+  register: ssh_root_config
+  changed_when: "'Updated' in ssh_root_config.stdout"
+  when: opnsense_ssh_permit_root | bool
+
+- name: Configure SSH - Set port
+  ansible.builtin.raw: |
+    current_port=$(grep "^Port" /etc/ssh/sshd_config | awk '{print $2}' || echo "22")
+    if [ "$current_port" != "{{ opnsense_ssh_port }}" ]; then
+      sed -i.bak "s/^#*Port.*/Port {{ opnsense_ssh_port }}/" /etc/ssh/sshd_config
+      echo "Updated"
+    else
+      echo "Already configured"
+    fi
+  register: ssh_port_config
+  changed_when: "'Updated' in ssh_port_config.stdout"
+
+- name: Restart SSH if configuration changed
+  ansible.builtin.raw: |
+    /usr/local/etc/rc.d/openssh restart
+  when: ssh_password_config.changed or ssh_root_config.changed or ssh_port_config.changed
+
+- name: Verify SSH configuration
+  ansible.builtin.raw: |
+    grep -E "^(Port|PermitRootLogin|PasswordAuthentication)" /etc/ssh/sshd_config
+  register: ssh_config_verify
+  changed_when: false
+
+- name: Display SSH configuration
+  ansible.builtin.debug:
+    var: ssh_config_verify.stdout_lines

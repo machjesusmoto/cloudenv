@@ -113,8 +113,67 @@ $ ip route get 10.0.0.1
 - `tailscale-routing-fix.sh` - Script to manage ip rules for LAN priority
 - `spec.md` - Original feature specification
 
+## Non-Tailscale Client Access
+
+By default, non-Tailscale clients on the home LAN cannot reach the cloudenv subnet (10.0.0.0/24) even though OPNsense has `--accept-routes` enabled and the route exists in its routing table.
+
+### Problem
+
+When a LAN client sends traffic to 10.0.0.0/24:
+1. Traffic arrives at OPNsense
+2. OPNsense looks up route → tailscale0 interface
+3. Traffic is forwarded with **original source IP** (e.g., 192.168.1.192)
+4. Tailscale daemon doesn't encapsulate forwarded traffic from non-local sources
+
+### Solution: Outbound NAT on Tailscale Interface
+
+Configure OPNsense to NAT traffic destined for cloudenv so it appears to originate from OPNsense's Tailscale IP:
+
+**OPNsense Configuration**:
+1. **Firewall → NAT → Outbound**
+2. Set mode to **Hybrid** (or Manual)
+3. Add rule:
+   - **Interface**: Tailscale
+   - **Source**: Trusted_LAN net (or specific LAN networks)
+   - **Destination**: 10.0.0.0/24
+   - **Translation**: Interface Address
+   - **Description**: "NAT LAN to CloudEnv via Tailscale"
+4. Save and Apply
+
+### Traffic Flow After NAT
+
+```
+LAN Client (192.168.1.192)
+    │
+    │ Packet to 10.0.0.1
+    ▼
+OPNsense LAN interface
+    │
+    │ NAT: src 192.168.1.192 → src 100.111.47.49
+    ▼
+OPNsense Tailscale (100.111.47.49)
+    │
+    │ Tailscale encapsulates (src is now local)
+    ▼
+pve-vps Tailscale (100.84.93.46)
+    │
+    │ Delivers to 10.0.0.1
+    ▼
+✅ Success - Reply returns via same path
+```
+
+### Verification
+
+From a non-Tailscale LAN client:
+```bash
+# Should succeed after NAT rule is applied
+ping 10.0.0.1
+traceroute -n 10.0.0.1
+```
+
 ## Notes
 
 1. **pve-vps IP**: The VPS host has IP 10.0.0.1 on vmbr1 (not 10.0.0.10 as in original spec)
 2. **Persistence**: The ip rules are not persistent across reboots. Use systemd service or NetworkManager dispatcher for persistence.
 3. **OPNsense routes**: Home LAN subnets (192.168.x.x) are advertised by OPNsense, enabling remote access when not on LAN
+4. **Non-Tailscale clients**: Require Outbound NAT on OPNsense's Tailscale interface to reach cloudenv (10.0.0.0/24)

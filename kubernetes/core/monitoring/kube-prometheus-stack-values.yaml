@@ -1,0 +1,216 @@
+# kube-prometheus-stack Helm Values Template
+# Reference: https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack
+#
+# STATUS: DEFERRED - Template for future implementation
+#
+# Installation (when ready):
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm install monitoring prometheus-community/kube-prometheus-stack \
+#     -n monitoring --create-namespace \
+#     -f kube-prometheus-stack-values.yaml
+
+# Global settings
+fullnameOverride: monitoring
+
+# Grafana configuration
+grafana:
+  enabled: true
+
+  # Admin credentials
+  adminPassword: "" # Set via --set or secret
+
+  # Persistence
+  persistence:
+    enabled: true
+    storageClassName: truenas-nfs
+    size: 1Gi
+
+  # Resource limits
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  # Ingress (disabled - use port-forward or NodePort)
+  ingress:
+    enabled: false
+
+  # Service type
+  service:
+    type: ClusterIP
+    # type: NodePort
+    # nodePort: 30080
+
+  # Default dashboards
+  defaultDashboardsEnabled: true
+  defaultDashboardsTimezone: UTC
+
+# Prometheus configuration
+prometheus:
+  enabled: true
+
+  prometheusSpec:
+    # Retention
+    retention: 30d
+    retentionSize: 45GB
+
+    # Storage
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: truenas-nfs
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 50Gi
+
+    # Resource limits
+    resources:
+      limits:
+        cpu: 500m
+        memory: 1Gi
+      requests:
+        cpu: 200m
+        memory: 512Mi
+
+    # Scrape interval
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+
+    # Service discovery
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelector: {}
+    podMonitorNamespaceSelector: {}
+
+# Alertmanager configuration
+alertmanager:
+  enabled: true
+
+  alertmanagerSpec:
+    # Storage
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: truenas-nfs
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 1Gi
+
+    # Resource limits
+    resources:
+      limits:
+        cpu: 100m
+        memory: 128Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi
+
+  # Alert routing configuration (customize)
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ['alertname', 'namespace']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: 'null'
+      routes:
+        - match:
+            severity: critical
+          receiver: 'null'  # Replace with actual receiver
+    receivers:
+      - name: 'null'
+    # Example Slack receiver (uncomment and configure)
+    # receivers:
+    #   - name: 'slack'
+    #     slack_configs:
+    #       - api_url: 'https://hooks.slack.com/services/xxx/xxx/xxx'
+    #         channel: '#alerts'
+
+# Node exporter
+nodeExporter:
+  enabled: true
+
+  resources:
+    limits:
+      cpu: 100m
+      memory: 64Mi
+    requests:
+      cpu: 50m
+      memory: 32Mi
+
+# Kube-state-metrics
+kubeStateMetrics:
+  enabled: true
+
+# Prometheus operator
+prometheusOperator:
+  enabled: true
+
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# Default rules
+defaultRules:
+  create: true
+  rules:
+    alertmanager: true
+    etcd: true
+    configReloaders: true
+    general: true
+    k8s: true
+    kubeApiserverAvailability: true
+    kubeApiserverBurnrate: true
+    kubeApiserverHistogram: true
+    kubeApiserverSlos: true
+    kubeControllerManager: true
+    kubelet: true
+    kubeProxy: true
+    kubePrometheusGeneral: true
+    kubePrometheusNodeRecording: true
+    kubernetesApps: true
+    kubernetesResources: true
+    kubernetesStorage: true
+    kubernetesSystem: true
+    kubeSchedulerAlerting: true
+    kubeSchedulerRecording: true
+    kubeStateMetrics: true
+    network: true
+    node: true
+    nodeExporterAlerting: true
+    nodeExporterRecording: true
+    prometheus: true
+    prometheusOperator: true
+
+# Disable components not relevant for Talos
+kubeControllerManager:
+  enabled: false  # Not accessible in Talos
+
+kubeScheduler:
+  enabled: false  # Not accessible in Talos
+
+kubeProxy:
+  enabled: false  # Replaced by Cilium
+
+# etcd monitoring (if accessible)
+kubeEtcd:
+  enabled: true
+  endpoints:
+    - 10.9.8.11
+    - 10.9.8.12
+    - 10.9.8.13
+  service:
+    enabled: true
+    port: 2381
+    targetPort: 2381

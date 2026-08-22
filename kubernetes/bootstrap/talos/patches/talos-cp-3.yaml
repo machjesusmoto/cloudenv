@@ -1,0 +1,10 @@
+# Node-specific patch for talos-cp-3
+# Apply via: talosctl apply-config --config-patch @patches/talos-cp-3.yaml
+
+machine:
+  network:
+    hostname: talos-cp-3
+    interfaces:
+      - interface: eth0
+        addresses:
+          - 10.0.0.13/24

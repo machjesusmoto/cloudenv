@@ -1,0 +1,88 @@
+# TrueNAS Scale NFS Share Configuration Contract
+# Reference configuration for democratic-csi integration
+#
+# This documents the expected TrueNAS configuration,
+# not a file to be applied directly.
+
+---
+# TrueNAS Pool Configuration
+pool:
+  name: k8s-storage
+  type: stripe                    # Single disk (lab environment)
+  disk: /dev/sdb                  # 200GB dedicated disk
+  compression: lz4
+  atime: off
+
+# Dataset for Kubernetes PVs
+dataset:
+  name: k8s-storage/nfs
+  quota: 180G                     # Leave headroom
+  refquota: 180G
+  compression: inherit
+  atime: inherit
+
+# NFS Share Configuration
+nfs_share:
+  path: /mnt/k8s-storage/nfs
+  comment: "Kubernetes PersistentVolumes"
+  enabled: true
+
+  # Access Control
+  networks:
+    - 10.9.8.0/24                 # Cluster network only
+  hosts: []                       # No host-specific rules
+
+  # NFS Options
+  maproot_user: root
+  maproot_group: wheel
+  mapall_user: ""                 # Don't map all users
+  mapall_group: ""
+
+  # Security
+  security:
+    - sys                         # Standard UNIX auth
+
+# NFS Service Configuration
+nfs_service:
+  enabled: true
+  servers: 4                      # Number of NFS server processes
+  udp: false                      # TCP only
+  allow_nonroot: false
+  v4: true                        # NFSv4 enabled
+  v4_v3owner: false
+  v4_krb: false                   # No Kerberos
+  mountd_port: null               # Dynamic port
+  rpcstatd_port: null             # Dynamic port
+  rpclockd_port: null             # Dynamic port
+
+# API User for democratic-csi
+api_user:
+  username: k8s-csi
+  # API key generated in TrueNAS UI
+  # Stored encrypted in democratic-csi secret
+  permissions:
+    - dataset: k8s-storage/nfs
+      permission: FULL_CONTROL
+
+---
+# Expected TrueNAS UI Steps:
+#
+# 1. Create Pool:
+#    Storage > Pools > Add > Name: k8s-storage > Add vdev > sdb
+#
+# 2. Create Dataset:
+#    Storage > Pools > k8s-storage > Add Dataset
+#    Name: nfs, Compression: LZ4, Quota: 180G
+#
+# 3. Create NFS Share:
+#    Shares > Unix Shares (NFS) > Add
+#    Path: /mnt/k8s-storage/nfs
+#    Networks: 10.9.8.0/24
+#
+# 4. Enable NFS Service:
+#    Services > NFS > Enable + Start Automatically
+#
+# 5. Create API Key:
+#    Credentials > API Keys > Add
+#    Name: k8s-csi
+#    Copy key for democratic-csi secret

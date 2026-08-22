@@ -31,6 +31,7 @@ inventory/group_vars/vault.yml
 !.env.example
 secrets/
 credentials/
+.secrets/
 
 # SSH keys
 id_rsa*
@@ -79,3 +80,29 @@ pve-*.tar
 controlplane.yaml
 worker.yaml
 talosconfig
+
+# Kubernetes configs with secrets
+kubeconfig
+*.kubeconfig
+secrets.yaml
+*-secrets.yaml
+!*-secrets.yaml.template
+!*-secrets.enc.yaml
+
+# age encryption keys (private keys)
+keys.txt
+*.age
+!*.age.pub
+
+# SOPS encrypted files should be committed
+# But unencrypted secrets should not
+!*.enc.yaml
+!*.enc.json
+
+# Helm
+charts/
+*.tgz
+
+# Temporary bootstrap files
+*.bak
+*.orig

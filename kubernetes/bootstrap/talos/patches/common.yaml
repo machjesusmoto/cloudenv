@@ -1,0 +1,37 @@
+# Common Patch for All Control Plane Nodes
+# Applied via: talosctl gen config --config-patch @patches/common.yaml
+#
+# This patch configures:
+# - Talos VIP for Kubernetes API high availability
+# - Network settings common to all nodes
+
+machine:
+  network:
+    interfaces:
+      - interface: eth0
+        dhcp: false
+        routes:
+          - network: 0.0.0.0/0
+            gateway: 10.0.0.1
+        # Talos VIP - shared virtual IP for Kubernetes API
+        # Only one node actively binds; others failover automatically
+        vip:
+          ip: 10.0.0.100
+
+  # Time synchronization
+  time:
+    disabled: false
+    servers:
+      - time.cloudflare.com
+
+  # Sysctls for better networking
+  sysctls:
+    net.core.somaxconn: "65535"
+    net.core.netdev_max_backlog: "16384"
+    vm.max_map_count: "262144"
+
+  # Logging
+  logging:
+    destinations:
+      - endpoint: "udp://10.0.0.20:514"  # TrueNAS syslog (optional)
+        format: json_lines

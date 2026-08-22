@@ -1,0 +1,26 @@
+# democratic-csi Kustomization
+# Note: democratic-csi is installed via Helm, this is for ArgoCD discovery
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: democratic-csi
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+    install.method: helm
+
+# Resources managed via Kustomize (not Helm)
+resources:
+  - namespace.yaml
+
+# StorageClass typically created by Helm, but can be created separately
+# Uncomment if managing StorageClass via Kustomize instead of Helm
+# - storageclass.yaml
+
+# Secret is encrypted with SOPS - applied separately before Helm install
+# See driver-config-secret.yaml.template for format
+
+# Installation steps:
+# 1. Create namespace: kubectl apply -f namespace.yaml
+# 2. Prepare and apply secret (see template)
+# 3. Install Helm chart: helm install democratic-csi ...

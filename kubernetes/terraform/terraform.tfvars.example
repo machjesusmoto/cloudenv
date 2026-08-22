@@ -1,0 +1,127 @@
+# Terraform Variables Example
+# Copy this file to terraform.tfvars and customize for your environment
+#
+# SECURITY: terraform.tfvars should NEVER be committed to Git
+# Add to .gitignore: terraform.tfvars, *.auto.tfvars
+
+# ============================================================================
+# Proxmox Configuration (REQUIRED)
+# ============================================================================
+
+# Proxmox API endpoint
+proxmox_endpoint = "https://proxmox.example.com:8006"
+
+# API Token: Create in Proxmox UI → Datacenter → Permissions → API Tokens
+# Format: "user@realm!tokenid=secret"
+# Required permissions: VM.Allocate, VM.Clone, VM.Config.*, VM.PowerMgmt, Datastore.AllocateSpace
+proxmox_api_token = "root@pam!terraform=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# Proxmox node name (run 'pvecm status' or check Proxmox UI)
+proxmox_node = "pve"
+
+# Storage pool for VM disks (run 'pvesm status' to list)
+proxmox_storage = "local-lvm"
+
+# Storage for ISO images
+proxmox_iso_storage = "local"
+
+# Network bridge (run 'pvesh get /nodes/{node}/network' to list)
+proxmox_bridge = "vmbr0"
+
+# ============================================================================
+# Network Configuration
+# ============================================================================
+
+network_gateway = "10.9.8.1"
+network_dns     = ["10.9.8.1", "1.1.1.1"]
+network_cidr    = 24
+
+# ============================================================================
+# TrueNAS Configuration
+# ============================================================================
+
+truenas_enabled       = true
+truenas_vmid          = 200
+truenas_ip            = "10.9.8.20"
+truenas_cpu           = 2
+truenas_memory        = 16384
+truenas_os_disk_size  = 100
+truenas_data_disk_size = 200
+truenas_iso           = "TrueNAS-SCALE-24.10.2.iso"
+
+# ============================================================================
+# Talos Cluster Configuration
+# ============================================================================
+
+talos_version      = "v1.9.1"
+kubernetes_version = "1.31.4"
+cluster_name       = "talos-cluster"
+cluster_endpoint   = "https://10.9.8.100:6443"
+cluster_vip        = "10.9.8.100"
+
+# Control plane nodes
+controlplane_nodes = [
+  {
+    name   = "talos-cp-1"
+    vmid   = 201
+    ip     = "10.9.8.11"
+    cpu    = 3
+    memory = 14336
+    disk   = 50
+  },
+  {
+    name   = "talos-cp-2"
+    vmid   = 202
+    ip     = "10.9.8.12"
+    cpu    = 3
+    memory = 14336
+    disk   = 50
+  },
+  {
+    name   = "talos-cp-3"
+    vmid   = 203
+    ip     = "10.9.8.13"
+    cpu    = 3
+    memory = 14336
+    disk   = 50
+  }
+]
+
+# Worker nodes (empty for control-plane-only cluster)
+worker_nodes = []
+
+# ============================================================================
+# Cilium CNI
+# ============================================================================
+
+cilium_version               = "1.16.5"
+cilium_kube_proxy_replacement = true
+
+# ============================================================================
+# Democratic CSI (TrueNAS Storage)
+# ============================================================================
+
+democratic_csi_enabled = true
+democratic_csi_version = "0.14.7"
+
+# TrueNAS API Key: Create in TrueNAS UI → API Keys → Add
+# This must be generated after TrueNAS is installed and configured
+truenas_api_key = ""  # Leave empty initially, add after TrueNAS setup
+
+truenas_nfs_dataset = "k8s-storage/nfs"
+
+# ============================================================================
+# ArgoCD
+# ============================================================================
+
+argocd_enabled   = true
+argocd_version   = "7.7.16"
+argocd_namespace = "argocd"
+
+# ============================================================================
+# Output Paths
+# ============================================================================
+
+output_dir      = "../bootstrap/talos/configurations"
+kubeconfig_path = "~/.kube/config"
+talosconfig_path = "~/.talos/config"

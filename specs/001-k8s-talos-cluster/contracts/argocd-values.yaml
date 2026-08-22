@@ -1,0 +1,141 @@
+# ArgoCD Configuration Contract
+# Reference: https://argo-cd.readthedocs.io/en/stable/
+#
+# Bootstrap: kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+# This file documents expected configuration, not a Helm values file.
+
+---
+# Namespace
+namespace: argocd
+
+# Installation manifest source
+install:
+  source: https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+  # Alternative: https://raw.githubusercontent.com/argoproj/argo-cd/v2.13.0/manifests/install.yaml
+
+# Post-install configuration
+config:
+  # Disable anonymous access
+  users.anonymous.enabled: "false"
+
+  # Admin password (change after first login)
+  # Retrieved: kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+
+  # Repository credentials (if private repo)
+  # Stored in argocd-repo-creds secret
+
+  # OIDC/SSO (deferred - using local admin for now)
+  oidc.config: ""
+
+  # Resource tracking method
+  application.resourceTrackingMethod: annotation
+
+  # Timeout settings
+  timeout.reconciliation: 180s
+  timeout.hard.reconciliation: 0s
+
+# Server configuration
+server:
+  # Disable TLS (handled by ingress/Tailscale)
+  insecure: true
+
+  # Base URL for ArgoCD UI
+  # Accessed via Tailscale at https://10.9.8.100:8080 or port-forward
+
+  # Extra arguments
+  extraArgs:
+    - --insecure
+
+# Application controller
+controller:
+  # Sync settings
+  replicas: 1
+
+  # Resource limits
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+# Repo server
+repoServer:
+  replicas: 1
+
+  # SOPS plugin for encrypted secrets
+  # Requires ksops or sops-secrets-operator
+
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+# Redis (bundled)
+redis:
+  enabled: true
+
+# Notifications (deferred)
+notifications:
+  enabled: false
+
+---
+# App-of-Apps Pattern
+# Root Application that manages all other applications
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-of-apps
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/<OWNER>/cloudenv.git  # This repository
+    targetRevision: main
+    path: kubernetes/apps
+    directory:
+      recurse: true
+      include: '*.yaml'
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+---
+# ArgoCD Access via Tailscale
+#
+# Option 1: Port-forward (simple)
+#   kubectl port-forward svc/argocd-server -n argocd 8080:443
+#   Access: https://localhost:8080
+#
+# Option 2: NodePort (direct access)
+#   kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "NodePort"}}'
+#   Access: https://10.9.8.11:3XXXX (node IP + NodePort)
+#
+# Option 3: Tailscale Ingress (recommended for production)
+#   Deploy Tailscale operator with Ingress support
+#   Access: https://argocd.tailnet-name.ts.net

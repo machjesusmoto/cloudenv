@@ -1,0 +1,140 @@
+# Kubernetes Cluster .gitignore
+# Prevent accidental commit of sensitive data
+
+# ======================
+# Unencrypted Secrets
+# ======================
+
+# Talos secrets (must be encrypted with SOPS)
+secrets.yaml
+talosconfig
+configurations.yaml
+configurations/*.yaml
+!configurations/.gitkeep
+
+# Kubernetes secrets (must be encrypted with SOPS)
+*-secret.yaml
+*-secrets.yaml
+secret.yaml
+secrets.yaml
+
+# Allow encrypted versions
+!*-secret.enc.yaml
+!*-secrets.enc.yaml
+!*.enc.yaml
+!*.sops.yaml
+
+# ======================
+# Credentials & Keys
+# ======================
+
+# Private keys
+*.key
+*.pem
+id_rsa
+id_ed25519
+
+# API keys and tokens
+*.token
+api-key*
+apikey*
+
+# Age encryption keys
+keys.txt
+*.age
+
+# Kubeconfig (contains certificates)
+kubeconfig
+kubeconfig.yaml
+.kube/
+
+# Talos client config
+.talos/
+
+# ======================
+# Temporary Files
+# ======================
+
+# Decrypted temporary files
+*.dec
+*.dec.yaml
+*.decrypted
+*.decrypted.yaml
+
+# Editor backup files
+*~
+*.swp
+*.swo
+.*.swp
+
+# macOS
+.DS_Store
+
+# ======================
+# Terraform
+# ======================
+
+# Terraform state (contains sensitive data)
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Terraform variables (contains credentials)
+terraform.tfvars
+*.auto.tfvars
+
+# Terraform directories
+.terraform/
+.terraform.lock.hcl
+
+# Terraform crash logs
+crash.log
+crash.*.log
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# ======================
+# Generated Files
+# ======================
+
+# Helm charts
+charts/
+Chart.lock
+
+# Kustomize build output
+kustomize-build/
+
+# ArgoCD downloaded manifests
+install.yaml
+
+# ======================
+# Development
+# ======================
+
+# IDE
+.idea/
+.vscode/
+*.code-workspace
+
+# Test output
+test-results/
+coverage/
+
+# Logs
+*.log
+logs/
+
+# ======================
+# Explicit Includes
+# ======================
+
+# Always track these even if matched above
+!.sops.yaml
+!*-values.yaml
+!values.yaml
+!kustomization.yaml
+!.gitkeep

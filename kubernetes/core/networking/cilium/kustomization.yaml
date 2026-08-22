@@ -1,0 +1,27 @@
+# Cilium CNI Kustomization
+# Note: Cilium is installed via Helm, not Kustomize
+# This file is for ArgoCD ApplicationSet discovery
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: cilium
+  annotations:
+    # Indicate Helm-based installation
+    argocd.argoproj.io/sync-wave: "-5"
+    install.method: helm
+
+# Cilium is installed via Helm chart
+# See: kubernetes/bootstrap/scripts/install-cilium.sh
+# Values: kubernetes/core/networking/cilium/values.yaml
+
+# This kustomization exists for:
+# 1. ArgoCD app discovery patterns
+# 2. Future overlay customizations
+# 3. Additional Cilium resources (NetworkPolicies, etc.)
+
+resources: []
+
+# Future: Add Cilium network policies here
+# - network-policies/default-deny.yaml
+# - network-policies/allow-dns.yaml

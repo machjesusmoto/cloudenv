@@ -1,0 +1,24 @@
+# Kustomization for Kubernetes Namespaces
+# Managed by ArgoCD - do not apply manually in production
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # Core infrastructure namespaces
+  # - democratic-csi.yaml
+  # - argocd.yaml
+  # - monitoring.yaml (P3 - deferred)
+
+# Namespace definitions will be added as components are deployed
+# Each namespace file should include:
+# - Namespace resource
+# - ResourceQuota (if applicable)
+# - LimitRange (if applicable)
+# - NetworkPolicy (default deny)
+
+labels:
+  - pairs:
+      managed-by: argocd
+      environment: production
+    includeSelectors: false

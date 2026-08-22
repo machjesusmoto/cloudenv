@@ -1,0 +1,212 @@
+# Cilium CNI Helm Values Contract
+# Reference: https://docs.cilium.io/en/stable/
+#
+# Install: helm install cilium cilium/cilium -f values.yaml -n kube-system
+
+# Talos Linux specific settings
+# Talos manages Cilium installation via machine config inline manifests
+# or via Helm post-bootstrap
+
+# Cluster configuration
+cluster:
+  name: cloudenv-k8s
+  id: 0                          # Cluster ID for multi-cluster
+
+# IPAM configuration
+ipam:
+  mode: kubernetes               # Use Kubernetes PodCIDR
+  operator:
+    clusterPoolIPv4PodCIDRList:
+      - 10.244.0.0/16
+
+# kube-proxy replacement (recommended for Talos)
+kubeProxyReplacement: true
+kubeProxyReplacementHealthzBindAddr: 0.0.0.0:10256
+
+# K8s service host/port for kube-proxy replacement
+k8sServiceHost: 10.9.8.100       # VIP
+k8sServicePort: 6443
+
+# Security context for Talos
+securityContext:
+  capabilities:
+    ciliumAgent:
+      - CHOWN
+      - KILL
+      - NET_ADMIN
+      - NET_RAW
+      - IPC_LOCK
+      - SYS_ADMIN
+      - SYS_RESOURCE
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    cleanCiliumState:
+      - NET_ADMIN
+      - SYS_ADMIN
+      - SYS_RESOURCE
+
+# Cilium agent configuration
+agent:
+  # Run as non-root where possible
+  securityContext:
+    privileged: true
+
+# CNI configuration
+cni:
+  install: true
+  chainingMode: none             # Standalone mode
+  exclusive: true                # Only CNI plugin
+
+# BPF configuration
+bpf:
+  masquerade: true
+  clockProbe: false
+  preallocateMaps: false
+  tproxy: true
+
+# Routing mode
+routingMode: native              # Native routing (no encapsulation)
+autoDirectNodeRoutes: true
+
+# Enable native routing with Talos
+ipv4NativeRoutingCIDR: 10.244.0.0/16
+
+# Hubble observability
+hubble:
+  enabled: true
+
+  relay:
+    enabled: true
+    replicas: 1
+    resources:
+      limits:
+        cpu: 100m
+        memory: 128Mi
+      requests:
+        cpu: 10m
+        memory: 64Mi
+
+  ui:
+    enabled: true
+    replicas: 1
+    ingress:
+      enabled: false             # Access via port-forward
+    resources:
+      limits:
+        cpu: 100m
+        memory: 128Mi
+      requests:
+        cpu: 10m
+        memory: 64Mi
+
+  metrics:
+    enabled:
+      - dns
+      - drop
+      - tcp
+      - flow
+      - port-distribution
+      - icmp
+      - http
+
+# Operator configuration
+operator:
+  replicas: 1
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+# Enable network policies
+enableNetworkPolicy: true
+
+# Service mesh (disabled - not needed for initial deployment)
+ingressController:
+  enabled: false
+
+# Gateway API (disabled)
+gatewayAPI:
+  enabled: false
+
+# L2 announcements (disabled - using Talos VIP)
+l2announcements:
+  enabled: false
+
+# BGP (disabled - not needed for single-site)
+bgp:
+  enabled: false
+
+# Resource limits for agents
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+# Node selector (run on all nodes)
+nodeSelector: {}
+
+# Tolerations (run on control plane nodes too)
+tolerations:
+  - operator: Exists
+
+# Prometheus metrics
+prometheus:
+  enabled: true
+  serviceMonitor:
+    enabled: false               # Enable when Prometheus deployed
+
+---
+# Talos Machine Config Inline Manifest Alternative
+# Instead of Helm, Cilium can be deployed via Talos machine config:
+#
+# cluster:
+#   inlineManifests:
+#     - name: cilium
+#       contents: |
+#         # Cilium install manifest from cilium CLI
+#
+# Generate manifest: cilium install --helm-values values.yaml --dry-run-helm-values
+
+---
+# Network Policy Examples
+
+# Default deny all ingress (recommended)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: default
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+
+---
+# Allow DNS traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: default
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

@@ -1,0 +1,33 @@
+# SOPS Configuration for Kubernetes Secrets Encryption
+# Reference: https://github.com/getsops/sops
+
+# This file configures SOPS to encrypt secrets using age keys
+# The age public key is safe to commit; private key must be secured separately
+
+creation_rules:
+  # Encrypt all secrets in the kubernetes directory
+  - path_regex: kubernetes/.*\.enc\.yaml$
+    age: >-
+      # PLACEHOLDER: Replace with actual age public key after generation
+      # Generate with: age-keygen -o keys.txt
+      # Example: age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      age1REPLACE_WITH_YOUR_PUBLIC_KEY
+
+  # Encrypt Talos secrets
+  - path_regex: kubernetes/bootstrap/talos/.*secrets.*\.yaml$
+    age: >-
+      age1REPLACE_WITH_YOUR_PUBLIC_KEY
+
+  # Encrypt democratic-csi driver config
+  - path_regex: kubernetes/core/storage/democratic-csi/.*secret.*\.yaml$
+    age: >-
+      age1REPLACE_WITH_YOUR_PUBLIC_KEY
+
+# Encrypted fields - only encrypt specific keys, not entire file
+# This allows viewing non-sensitive metadata
+encrypted_regex: ^(data|stringData|apiKey|password|token|privateKey)$
+
+# Store SOPS metadata in the encrypted file
+stores:
+  yaml:
+    indent: 2

@@ -1,0 +1,13 @@
+# democratic-csi Namespace
+# Creates the namespace for the CSI driver components
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: democratic-csi
+  labels:
+    app.kubernetes.io/name: democratic-csi
+    app.kubernetes.io/component: storage
+    # Exempt from PodSecurity restricted mode
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: privileged
+    pod-security.kubernetes.io/audit: privileged

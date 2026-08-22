@@ -1,0 +1,176 @@
+# Cilium Helm Values for Talos Linux Kubernetes Cluster
+# Reference: https://docs.cilium.io/en/stable/installation/k8s-install-helm/
+#
+# Key Features:
+# - kube-proxy replacement (disabled in Talos)
+# - Native routing mode for optimal performance
+# - Hubble observability enabled
+# - L7 policy enforcement
+
+# Cilium version
+image:
+  repository: quay.io/cilium/cilium
+  tag: v1.16.4
+  pullPolicy: IfNotPresent
+
+# Cluster configuration
+cluster:
+  name: cloudenv-k8s
+  id: 1
+
+# kube-proxy replacement (Talos has kube-proxy disabled)
+kubeProxyReplacement: true
+
+# Kubernetes API server endpoint (Talos VIP)
+k8sServiceHost: "10.0.0.100"
+k8sServicePort: "6443"
+
+# IPAM configuration - use Kubernetes native
+ipam:
+  mode: kubernetes
+
+# Routing mode - native for best performance
+routingMode: native
+autoDirectNodeRoutes: true
+ipv4NativeRoutingCIDR: "10.244.0.0/16"
+
+# Enable IPv4, disable IPv6
+ipv4:
+  enabled: true
+ipv6:
+  enabled: false
+
+# BPF configuration
+bpf:
+  # Enable socket-level load balancing
+  lbExternalClusterIP: true
+  # Masquerading mode
+  masquerade: true
+
+# Enable Hubble observability
+hubble:
+  enabled: true
+  relay:
+    enabled: true
+    replicas: 1
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 64Mi
+    tolerations:
+      - operator: Exists
+  ui:
+    enabled: true
+    replicas: 1
+    ingress:
+      enabled: false  # Enable when ingress controller is ready
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 64Mi
+    tolerations:
+      - operator: Exists
+  metrics:
+    enabled:
+      - dns
+      - drop
+      - tcp
+      - flow
+      - port-distribution
+      - icmp
+      - httpV2
+
+# Operator configuration
+operator:
+  replicas: 1
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 64Mi
+  tolerations:
+    - operator: Exists
+
+# Enable load balancer IPAM for services
+l2announcements:
+  enabled: false  # Enable when LoadBalancer is needed
+
+# Security policies
+policyEnforcementMode: default
+
+# Enable network policy
+enableNetworkPolicy: true
+
+# Metrics and monitoring
+prometheus:
+  enabled: true
+  serviceMonitor:
+    enabled: false  # Enable when Prometheus Operator is installed
+
+# Node initialization - required for Talos
+nodeinit:
+  enabled: false  # Talos handles BPF filesystem mount
+
+# Host services configuration for Talos
+hostServices:
+  enabled: true
+  protocols: tcp,udp
+
+# Encryption (optional - enable for production)
+encryption:
+  enabled: false
+  type: wireguard
+
+# Resource limits for Cilium agent
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+# Talos-specific: Don't manage cgroup v2
+cgroup:
+  autoMount:
+    enabled: false
+  hostRoot: /sys/fs/cgroup
+
+# Talos-specific: securityContext adjustments
+# Using privileged mode required for Talos Linux
+securityContext:
+  privileged: true
+  capabilities:
+    ciliumAgent:
+      - CHOWN
+      - KILL
+      - NET_ADMIN
+      - NET_RAW
+      - IPC_LOCK
+      - SYS_MODULE
+      - SYS_ADMIN
+      - SYS_RESOURCE
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    cleanCiliumState:
+      - NET_ADMIN
+      - SYS_ADMIN
+      - SYS_RESOURCE
+
+# Mount BPF filesystem (Talos mounts this already)
+bpf:
+  mount: /sys/fs/bpf
+
+# Tolerations for control plane nodes
+tolerations:
+  - operator: Exists

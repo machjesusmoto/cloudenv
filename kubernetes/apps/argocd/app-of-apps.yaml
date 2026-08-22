@@ -1,0 +1,100 @@
+# ArgoCD App-of-Apps Pattern
+# This root Application manages all other applications in the cluster
+# Reference: https://argo-cd.readthedocs.io/en/stable/operator-manual/cluster-bootstrapping/
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-of-apps
+  namespace: argocd
+  # Prevent accidental deletion
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/name: app-of-apps
+    app.kubernetes.io/component: gitops
+spec:
+  # Use default project (can be customized later)
+  project: default
+
+  source:
+    # Repository URL - UPDATE THIS to your repository
+    repoURL: https://github.com/OWNER/cloudenv.git
+    targetRevision: main
+    path: kubernetes/apps
+    directory:
+      recurse: true
+      include: '*.yaml'
+      exclude: '{kustomization.yaml,install.yaml,namespace.yaml}'
+
+  destination:
+    # In-cluster deployment
+    server: https://kubernetes.default.svc
+    namespace: argocd
+
+  # Automated sync policy
+  syncPolicy:
+    automated:
+      # Remove resources that are no longer in Git
+      prune: true
+      # Auto-heal drift from desired state
+      selfHeal: true
+      # Don't sync if source is empty
+      allowEmpty: false
+    syncOptions:
+      # Create namespaces if they don't exist
+      - CreateNamespace=true
+      # Delete resources before recreating (safer for some CRDs)
+      - PrunePropagationPolicy=foreground
+      # Prune after sync (avoid orphans)
+      - PruneLast=true
+      # Respect existing resources
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+---
+# Core Infrastructure Application
+# Manages networking, storage, and security components
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: core-infrastructure
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/name: core-infrastructure
+    app.kubernetes.io/component: infrastructure
+  annotations:
+    # Deploy infrastructure before applications
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/OWNER/cloudenv.git
+    targetRevision: main
+    path: kubernetes/core
+    directory:
+      recurse: true
+      include: '*.yaml'
+
+  destination:
+    server: https://kubernetes.default.svc
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m

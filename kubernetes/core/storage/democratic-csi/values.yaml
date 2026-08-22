@@ -1,0 +1,103 @@
+# democratic-csi Helm Values for TrueNAS NFS
+# Reference: https://github.com/democratic-csi/charts
+#
+# Install:
+#   helm repo add democratic-csi https://democratic-csi.github.io/charts/
+#   helm install democratic-csi democratic-csi/democratic-csi \
+#     -n democratic-csi \
+#     -f values.yaml \
+#     --set driver.existingConfigSecret=democratic-csi-driver-config
+
+# CSI Driver identification
+csiDriver:
+  name: "org.democratic-csi.nfs"
+
+# Use existing secret for driver configuration
+# Secret created separately and encrypted with SOPS
+driver:
+  existingConfigSecret: democratic-csi-driver-config
+
+# Storage class configuration
+storageClasses:
+  - name: truenas-nfs
+    # Set as default StorageClass
+    defaultClass: true
+    # Delete volumes when PVC is deleted
+    reclaimPolicy: Delete
+    # Immediate binding (not WaitForFirstConsumer)
+    volumeBindingMode: Immediate
+    # Allow volume expansion
+    allowVolumeExpansion: true
+    # Mount options for NFS
+    mountOptions:
+      - nfsvers=4.1
+      - noatime
+      - nodiratime
+
+# Controller deployment
+controller:
+  enabled: true
+  replicaCount: 1
+
+  # Controller tolerations for control plane nodes
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+# Node DaemonSet
+node:
+  enabled: true
+
+  # Run on all nodes including control plane
+  tolerations:
+    - effect: NoSchedule
+      operator: Exists
+    - effect: NoExecute
+      operator: Exists
+
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+# CSI sidecars
+csiSnapshotter:
+  # Enable snapshot support
+  enabled: true
+  args:
+    - --v=5
+    - --leader-election
+
+csiResizer:
+  # Enable volume expansion
+  enabled: true
+  args:
+    - --v=5
+    - --leader-election
+
+csiProvisioner:
+  # Provisioner configuration
+  args:
+    - --v=5
+    - --leader-election
+    - --timeout=90s
+    - --worker-threads=10
+
+# Volume snapshot classes
+volumeSnapshotClasses:
+  - name: truenas-nfs-snapshots
+    driver: org.democratic-csi.nfs
+    deletionPolicy: Delete
+    parameters: {}

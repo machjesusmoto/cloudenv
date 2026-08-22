@@ -1,0 +1,45 @@
+# TrueNAS NFS StorageClass
+# Note: This StorageClass is typically created by Helm chart
+# This manifest exists for reference and manual deployment if needed
+#
+# The Helm chart creates this automatically via values.yaml storageClasses section
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: truenas-nfs
+  annotations:
+    # Set as default StorageClass
+    storageclass.kubernetes.io/is-default-class: "true"
+    # Description for documentation
+    description: "TrueNAS Scale NFS dynamic provisioner via democratic-csi"
+  labels:
+    app.kubernetes.io/name: democratic-csi
+    app.kubernetes.io/component: storage
+# CSI driver name
+provisioner: org.democratic-csi.nfs
+# Delete PV when PVC is deleted
+reclaimPolicy: Delete
+# Immediate binding
+volumeBindingMode: Immediate
+# Allow volume expansion
+allowVolumeExpansion: true
+# Mount options for NFS
+mountOptions:
+  - nfsvers=4.1
+  - noatime
+  - nodiratime
+# No additional parameters needed - config from secret
+parameters: {}
+---
+# VolumeSnapshotClass for ZFS snapshots
+# Requires VolumeSnapshot CRDs installed
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: truenas-nfs-snapshots
+  labels:
+    app.kubernetes.io/name: democratic-csi
+    app.kubernetes.io/component: storage
+driver: org.democratic-csi.nfs
+deletionPolicy: Delete
+parameters: {}

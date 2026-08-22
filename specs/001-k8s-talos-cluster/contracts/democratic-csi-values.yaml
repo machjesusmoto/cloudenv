@@ -1,0 +1,135 @@
+# democratic-csi Helm Values Contract
+# Reference: https://github.com/democratic-csi/charts
+#
+# Install: helm install democratic-csi democratic-csi/democratic-csi -f values.yaml -n democratic-csi
+
+csiDriver:
+  # Driver name used in StorageClass
+  name: "org.democratic-csi.nfs"
+
+# Storage system connection (TrueNAS Scale)
+storageClasses:
+  - name: truenas-nfs
+    defaultClass: true
+    reclaimPolicy: Delete
+    volumeBindingMode: Immediate
+    allowVolumeExpansion: true
+    parameters:
+      # Provisioner-specific parameters
+      fsType: nfs
+    mountOptions:
+      - nfsvers=4.1
+      - noatime
+      - nodiratime
+    secrets:
+      provisioner-secret:
+      controller-publish-secret:
+      node-stage-secret:
+      node-publish-secret:
+      controller-expand-secret:
+
+# Controller configuration
+controller:
+  enabled: true
+  replicaCount: 1
+
+  driver:
+    # TrueNAS connection settings
+    config:
+      driver: freenas-nfs
+      instance_id: truenas-nfs
+
+      httpConnection:
+        protocol: https
+        host: 10.9.8.20
+        port: 443
+        # API key from TrueNAS - stored in secret
+        apiKey: "${TRUENAS_API_KEY}"
+        allowInsecure: true  # Self-signed cert in lab
+        apiVersion: 2        # TrueNAS Scale API version
+
+      sshConnection:
+        host: 10.9.8.20
+        port: 22
+        username: root
+        # Private key for SSH operations - stored in secret
+        privateKey: "${SSH_PRIVATE_KEY}"
+
+      zfs:
+        # Parent dataset for dynamically provisioned volumes
+        datasetParentName: k8s-storage/nfs
+        # Permissions for created datasets
+        datasetEnableQuotas: true
+        datasetEnableReservation: false
+        datasetPermissionsMode: "0770"
+        datasetPermissionsUser: root
+        datasetPermissionsGroup: wheel
+
+      nfs:
+        # NFS share configuration
+        shareHost: 10.9.8.20
+        shareAlldirs: false
+        shareAllowedHosts: []
+        shareAllowedNetworks:
+          - 10.9.8.0/24
+        shareMaprootUser: root
+        shareMaprootGroup: wheel
+        shareMapallUser: ""
+        shareMapallGroup: ""
+
+# Node driver configuration
+node:
+  enabled: true
+
+  driver:
+    # Node mounts NFS shares
+    config:
+      driver: freenas-nfs
+
+  # Mount options for NFS
+  extraVolumeMounts: []
+
+  # Tolerate all taints to run on all nodes
+  tolerations:
+    - effect: NoSchedule
+      operator: Exists
+    - effect: NoExecute
+      operator: Exists
+
+# CSI sidecars
+csiSnapshotter:
+  enabled: true
+  # Snapshot support requires TrueNAS ZFS snapshots
+
+csiResizer:
+  enabled: true
+  # Volume expansion supported
+
+# Resource limits
+resources:
+  controller:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+  node:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+---
+# Secret template (encrypt with SOPS before committing)
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: democratic-csi-driver-config
+#   namespace: democratic-csi
+# type: Opaque
+# stringData:
+#   driver-config-file.yaml: |
+#     # Full driver config with secrets

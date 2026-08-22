@@ -1,0 +1,25 @@
+# ArgoCD Kustomization
+# Manages ArgoCD installation and app-of-apps bootstrap
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+
+namespace: argocd
+
+resources:
+  - namespace.yaml
+  # ArgoCD installation manifest (upstream)
+  # Source: https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+  # Note: Download and commit locally for reproducibility:
+  # curl -o install.yaml https://raw.githubusercontent.com/argoproj/argo-cd/v2.13.0/manifests/install.yaml
+  # - install.yaml
+  - app-of-apps.yaml
+  - projects/
+
+# Common labels for all ArgoCD resources
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize

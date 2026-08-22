@@ -1,0 +1,71 @@
+# ArgoCD Default Project Configuration
+# Extends the default project with additional settings
+# Reference: https://argo-cd.readthedocs.io/en/stable/user-guide/projects/
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+  # Prevent accidental deletion
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Default project for cluster applications
+
+  # Source repositories - UPDATE with your repository
+  sourceRepos:
+    - 'https://github.com/OWNER/cloudenv.git'
+    - 'https://github.com/argoproj/argo-cd.git'
+    # Allow Helm repositories
+    - 'https://argoproj.github.io/argo-helm'
+    - 'https://democratic-csi.github.io/charts/'
+    - 'https://helm.cilium.io/'
+
+  # Destination clusters and namespaces
+  destinations:
+    # Allow deployment to any namespace in the local cluster
+    - namespace: '*'
+      server: https://kubernetes.default.svc
+
+  # Cluster resources that can be managed
+  clusterResourceWhitelist:
+    # Allow all cluster-scoped resources
+    - group: '*'
+      kind: '*'
+
+  # Namespace resources that can be managed
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+
+  # Roles within this project
+  roles:
+    - name: read-only
+      description: Read-only access to project resources
+      policies:
+        - p, proj:default:read-only, applications, get, default/*, allow
+        - p, proj:default:read-only, applications, sync, default/*, deny
+      groups:
+        - readonly-users
+
+    - name: developer
+      description: Developer access - can sync applications
+      policies:
+        - p, proj:default:developer, applications, get, default/*, allow
+        - p, proj:default:developer, applications, sync, default/*, allow
+        - p, proj:default:developer, applications, delete, default/*, deny
+      groups:
+        - developers
+
+  # Orphaned resource monitoring
+  orphanedResources:
+    warn: true
+    ignore: []
+
+  # Sync windows (optional - for controlling when syncs can occur)
+  # syncWindows:
+  #   - kind: allow
+  #     schedule: '* * * * *'
+  #     duration: 24h
+  #     applications:
+  #       - '*'
